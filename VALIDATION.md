@@ -40,6 +40,13 @@ Ai-Thinker ESP-C3-13-Kit (ESP32-C3 rev 0.3, CH340 on COM6), Tonepie Ti Pro 25 ma
 - Build: flash 884,806 B. Updated over the air.
 - **None of these commands has reached the real MCU**, which was disconnected while they were developed.
 
+### 1.8.0 — visits instead of grams, Italian/English, cat popup, home-screen icon
+
+- The bin card counts visits since the last bag change (limit in visits); the gram estimate is gone. Settings saved by 1.x are migrated: limit in grams ÷ grams per visit (1500 ÷ 50 → 30 on this unit, confirmed over HTTP after the update). Host test covers the migration.
+- Both pages in Italian and English; server messages follow `X-Tonepie-Lang`. Tapping a cat opens its visits day by day. PNG icons (180/192/512) and a web app manifest are served for "Add to Home Screen".
+- Checked in a browser against the preview server (phone width, both languages, popup, settings save, icons, no console errors). Build: flash 917,650 B. Updated over the air; cats and visit history survived.
+- Adding the page to a real phone's home screen not tried yet.
+
 ## Not tested yet
 
 - Any physical command from this firmware: clean (101), empty (102), level litter (126), bag change (127), and the writes to 105/117/118/129.

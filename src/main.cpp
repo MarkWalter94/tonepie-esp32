@@ -12,10 +12,13 @@
 #include "litter_logic.h"
 #include "web_ui.h"
 #include "web_home.h"
+#include "icons.h"
 
 // UART0/Serial uses the onboard CH340; UART1 on GPIO6/7 serves Tonepie.
 HardwareSerial mcu(1);
 WebServer server(80);
+// Pages send "X-Tonepie-Lang: en" to get English messages; Italian otherwise.
+bool english(){ return server.header("X-Tonepie-Lang")=="en"; }
 struct Datapoint {
   bool used=false;
   uint8_t id=0,type=0;
@@ -33,15 +36,15 @@ enum class Init { Heartbeat, Product, Mode, Ready };
 Init initState=Init::Heartbeat;
 uint8_t networkReported=255;
 bool networkAck=false;
-String token,commandStatus="Nessun comando inviato";
+String token,commandIt="Nessun comando inviato",commandEn="No command sent";
 struct Pending { bool active=false; uint8_t id=0,type=0; uint32_t value=0,since=0; } pending;
-// Home page data: cats, visit history and estimated waste in the bin, kept in NVS.
+// Home page data: cats, visit history and visits since the last bag change, kept in NVS.
 Preferences prefs;
 Litter::Settings cats;
 Litter::History history;
 Litter::Tracker tracker;
 Litter::WeightLog weights,weightScratch;
-struct Bin { uint32_t wasteG=0,since=0,visits=0; } bin;
+struct Bin { uint32_t reserved=0,since=0,visits=0; } bin; // layout kept for the data saved by 1.x
 uint32_t litterAt=0; // when litter was last topped up
 bool kgSeen=false,clockStarted=false,otaAllowed=false,otaOk=false,apOn=false;
 String wifiSsid,wifiPassword; // NVS values set from /dev override the ones in config.h
@@ -97,8 +100,8 @@ void learnWeight(int8_t cat,uint16_t grams,uint32_t epoch) {
 const char* wifiPasswordForAp() { return Config::WIFI_PASSWORD; }
 void recordVisit(uint16_t weightG,uint16_t durationS) {
   Litter::Visit v{};v.epoch=epochNow();v.weightG=weightG;v.durationS=durationS;
-  v.cat=Litter::matchCat(cats,weightG);v.wasteG=cats.gramsPerVisit;
-  Litter::add(history,v);bin.wasteG+=v.wasteG;bin.visits++;learnWeight(v.cat,weightG,v.epoch);
+  v.cat=Litter::matchCat(cats,weightG);
+  Litter::add(history,v);bin.visits++;learnWeight(v.cat,weightG,v.epoch);
   logLine("Visita registrata: "+String(weightG)+" g, "+String(durationS)+" s, "+(v.cat<0?String("gatto non riconosciuto"):String(cats.cats[v.cat].name)));
 }
 // Community mapping, not verified on this unit: DP7 visits (per day, resets), DP8 duration (s),
@@ -140,7 +143,18 @@ Datapoint* findDp(uint8_t id) {
   for(auto& d:dps)if(d.used && d.id==id)return &d;
   return nullptr;
 }
+const char* labelEn(uint8_t id) {
+  switch(id){
+    case 22:return "Fault (bits to verify)";case 24:return "State (index to verify)";
+    case 101:return "Manual clean";case 102:return "Empty";
+    case 104:return "Presence (to verify)";case 105:return "Auto clean";
+    case 114:return "Child lock (to verify)";case 126:return "Level litter (to verify)";case 127:return "Bag change (to verify)";case 129:return "Deodorise after clean (to verify)";
+    case 117:return "Wait before cleaning (min)";case 118:return "Cleaning interval (min)";
+    default:return "To verify / read only";
+  }
+}
 const char* label(uint8_t id) {
+  if(english())return labelEn(id);
   switch(id){
     case 22:return "Fault (bit da verificare)";case 24:return "Stato (indice da verificare)";
     case 101:return "Pulizia manuale";case 102:return "Svuotamento";
@@ -162,13 +176,13 @@ String display(const Datapoint& d) {
   if(d.type==2)return String(int32_t(Tuya::read32(d.data)));
   if(d.type==4 || d.type==5)return String(number(d));
   // Strings are escaped by JSON and inserted as textContent in the browser.
-  if(d.type==3){String s;for(size_t i=0;i<d.len && i<128;i++)s+=d.data[i]>=32&&d.data[i]<127?char(d.data[i]):'.';if(d.len>128)s+=" [troncato]";return s;}
-  return hex(d.data,min(size_t(d.len),size_t(128)))+(d.len>128?" [troncato]":"");
+  if(d.type==3){String s;for(size_t i=0;i<d.len && i<128;i++)s+=d.data[i]>=32&&d.data[i]<127?char(d.data[i]):'.';if(d.len>128)s+=" [truncated]";return s;}
+  return hex(d.data,min(size_t(d.len),size_t(128)))+(d.len>128?" [truncated]":"");
 }
 void invalidate() {
   for(auto& d:dps)d.used=false;
   armed=false;networkAck=false;networkReported=255;queryScheduled=false;
-  if(pending.active){pending.active=false;commandStatus="MCU scollegata/riavviata: esito sconosciuto, non ripetere automaticamente";}
+  if(pending.active){pending.active=false;commandIt="MCU scollegata/riavviata: esito sconosciuto, non ripetere automaticamente";commandEn="MCU disconnected/restarted: result unknown, do not repeat automatically";}
 }
 void reportDps(const uint8_t* p,size_t n) {
   if(!Tuya::validDps(p,n)){++badDp;logLine("Report DP malformato: intero report ignorato");return;}
@@ -178,7 +192,7 @@ void reportDps(const uint8_t* p,size_t n) {
     if(!d)for(auto& candidate:dps)if(!candidate.used){d=&candidate;break;}
     if(d){d->used=true;d->id=id;d->type=type;d->len=len;d->seen=millis();memcpy(d->data,p+pos+4,min(len,sizeof(d->data)));
       if(pending.active && pending.id==id && pending.type==type && number(*d)==pending.value){
-        pending.active=false;commandStatus="DP "+String(id)+" riportato con valore richiesto; azione fisica non verificata";logLine(commandStatus);
+        pending.active=false;commandIt="DP "+String(id)+" riportato con valore richiesto; azione fisica non verificata";commandEn="DP "+String(id)+" reported with the requested value; physical action not verified";logLine(commandIt);
       }
       if(type==2)feedTracker(id,Tuya::read32(d->data));
     }else logLine("Cache DP piena: report non memorizzato");
@@ -222,8 +236,8 @@ void onFrame(uint8_t version,uint8_t cmd,const uint8_t* p,size_t n) {
 }
 Tuya::Parser parser(onFrame);
 
-void reply(int code,const String& message){
-  StaticJsonDocument<512> doc;doc["message"]=message;String body;serializeJson(doc,body);server.send(code,"application/json",body);
+void reply(int code,const String& it,const String& en){
+  StaticJsonDocument<512> doc;doc["message"]=english()?en:it;String body;serializeJson(doc,body);server.send(code,"application/json",body);
 }
 bool allowedHost(){
   String host=server.hostHeader();host.toLowerCase();
@@ -232,18 +246,18 @@ bool allowedHost(){
   return host==WiFi.localIP().toString() || host=="tonepie.local" || host=="tonepie" || host=="tonepie.fritz.box";
 }
 bool protect(){
-  if(!allowedHost()){reply(403,"Host non ammesso");return false;}
-  if(server.header("X-Tonepie-Token")!=token){reply(403,"Ricarica la dashboard prima di inviare");return false;}
+  if(!allowedHost()){reply(403,"Host non ammesso","Host not allowed");return false;}
+  if(server.header("X-Tonepie-Token")!=token){reply(403,"Ricarica la dashboard prima di inviare","Reload the page before sending");return false;}
   return true;
 }
 bool canWrite(uint8_t id,uint8_t type){
-  if(!isArmed()){reply(409,"Abilita gli invii dalla dashboard");return false;}
-  if(!online() || initState!=Init::Ready){reply(409,"MCU non pronta");return false;}
-  if(pending.active || (wrote && uint32_t(millis()-lastWrite)<2000)){reply(429,"Attendi l'esito del comando precedente");return false;}
+  if(!isArmed()){reply(409,"Abilita gli invii dalla dashboard","Enable sending from the dashboard first");return false;}
+  if(!online() || initState!=Init::Ready){reply(409,"MCU non pronta","MCU not ready");return false;}
+  if(pending.active || (wrote && uint32_t(millis()-lastWrite)<2000)){reply(429,"Attendi l'esito del comando precedente","Wait for the previous command's result");return false;}
   auto d=findDp(id);
   // DP126 (level litter) is a push button this MCU never reports: it cannot be checked against a report.
   if(id==126 && !d)return true;
-  if(!d || d->type!=type || uint32_t(millis()-d->seen)>Config::DP_FRESH_MS){reply(409,"DP assente, obsoleto o tipo inatteso: esegui query e verifica la mappatura");return false;}
+  if(!d || d->type!=type || uint32_t(millis()-d->seen)>Config::DP_FRESH_MS){reply(409,"DP assente, obsoleto o tipo inatteso: esegui query e verifica la mappatura","DP missing, stale or of unexpected type: run a query and check the mapping");return false;}
   return true;
 }
 void writeDp(uint8_t id,uint8_t type,uint32_t value){
@@ -253,13 +267,14 @@ void writeDp(uint8_t id,uint8_t type,uint32_t value){
     auto presence=findDp(104);auto fault=findDp(22);auto lock=findDp(114);
     if((presence && presence->type==1 && number(*presence)) ||
        (fault && fault->type==5 && number(*fault)) ||
-       (lock && lock->type==1 && number(*lock))){reply(409,"Presenza, fault o blocco segnalato: comando bloccato");return;}
+       (lock && lock->type==1 && number(*lock))){reply(409,"Presenza, fault o blocco segnalato: comando bloccato","Presence, fault or lock reported: command blocked");return;}
   }
   pending.active=true;pending.id=id;pending.type=type;pending.value=value;pending.since=millis();
   lastWrite=millis();wrote=true;
   if(type==1)sendBoolDP(id,value!=0);else sendValueDP(id,value);
-  commandStatus="DP "+String(id)+" trasmesso: attesa report, esecuzione non confermata";
-  queryDue=millis()+500;queryScheduled=true;reply(202,commandStatus);
+  commandIt="DP "+String(id)+" trasmesso: attesa report, esecuzione non confermata";
+  commandEn="DP "+String(id)+" sent: waiting for the report, execution not confirmed";
+  queryDue=millis()+500;queryScheduled=true;reply(202,commandIt,commandEn);
 }
 bool parseUnsigned(const String& s,uint32_t& value){
   if(s.isEmpty() || s.length()>10)return false;uint64_t n=0;
@@ -267,11 +282,11 @@ bool parseUnsigned(const String& s,uint32_t& value){
   value=uint32_t(n);return true;
 }
 void stateApi(){
-  if(!allowedHost()){reply(403,"Host non ammesso");return;}
+  if(!allowedHost()){reply(403,"Host non ammesso","Host not allowed");return;}
   DynamicJsonDocument doc(45000);
   doc["firmware"]=Config::FIRMWARE_VERSION;doc["mcu_rx"]=Config::MCU_RX;doc["mcu_tx"]=Config::MCU_TX;
   doc["token"]=token;doc["ip"]=WiFi.localIP().toString();doc["online"]=online();doc["ready"]=online()&&initState==Init::Ready;
-  doc["armed"]=isArmed();doc["pending"]=pending.active;doc["command"]=commandStatus;
+  doc["armed"]=isArmed();doc["pending"]=pending.active;doc["command"]=english()?commandEn:commandIt;
   doc["frames"]=parser.frames;doc["bad_checksum"]=parser.badChecksum;doc["bad_length"]=parser.badLength;
   doc["timeouts"]=parser.timeouts;doc["bad_dp"]=badDp;doc["heap"]=ESP.getFreeHeap();
   doc["ssid"]=wifiSsid;doc["recovery_ap"]=apOn;
@@ -280,11 +295,11 @@ void stateApi(){
   for(const auto& d:dps)if(d.used){auto j=array.createNestedObject();j["id"]=d.id;j["label"]=label(d.id);j["type"]=typeName(d.type);j["value"]=display(d);j["age_ms"]=uint32_t(millis()-d.seen);}
   JsonArray logArray=doc.createNestedArray("logs");
   for(size_t i=0;i<logCount;i++)logArray.add(logs[(logHead+60-logCount+i)%60]);
-  if(doc.overflowed()){reply(503,"Memoria dashboard insufficiente");return;}
+  if(doc.overflowed()){reply(503,"Memoria dashboard insufficiente","Not enough memory for the dashboard");return;}
   String body;serializeJson(doc,body);server.sendHeader("Cache-Control","no-store");server.send(200,"application/json",body);
 }
 void homeApi(){
-  if(!allowedHost()){reply(403,"Host non ammesso");return;}
+  if(!allowedHost()){reply(403,"Host non ammesso","Host not allowed");return;}
   DynamicJsonDocument doc(40000);
   doc["firmware"]=Config::FIRMWARE_VERSION;doc["token"]=token;doc["now"]=epochNow();
   JsonObject m=doc.createNestedObject("mcu");
@@ -299,17 +314,17 @@ void homeApi(){
   if(wait && wait->type==2)m["wait_min"]=number(*wait);
   if(odor && odor->type==1)m["odor"]=number(*odor)!=0;
   JsonObject c=doc.createNestedObject("config");
-  c["tolerance_g"]=cats.toleranceG;c["grams_per_visit"]=cats.gramsPerVisit;c["bin_limit_g"]=cats.binLimitG;
+  c["tolerance_g"]=cats.toleranceG;c["bin_limit_visits"]=cats.binLimitVisits;
   JsonArray catArray=c.createNestedArray("cats");
   for(int i=0;i<cats.catCount;i++){auto j=catArray.createNestedObject();j["name"]=cats.cats[i].name;j["weight_g"]=cats.cats[i].weightG;j["color"]=cats.cats[i].color;
     JsonArray days=j.createNestedArray("days");JsonArray grams=j.createNestedArray("grams"); // daily averages, oldest first
     for(int k=0;k<weights.count[i];k++){days.add(weights.p[i][k].day);grams.add(weights.p[i][k].grams);}}
   doc["litter_at"]=litterAt;
-  JsonObject b=doc.createNestedObject("bin");b["g"]=bin.wasteG;b["since"]=bin.since;b["visits"]=bin.visits;
+  JsonObject b=doc.createNestedObject("bin");b["since"]=bin.since;b["visits"]=bin.visits;
   JsonArray visitArray=doc.createNestedArray("visits"); // newest first
   for(int i=int(history.count)-1;i>=0;i--){const auto& v=history.v[i];auto j=visitArray.createNestedObject();
     j["id"]=v.id;j["t"]=v.epoch;j["g"]=v.weightG;j["s"]=v.durationS;j["cat"]=v.cat;j["manual"]=(v.flags&Litter::VISIT_MANUAL)!=0;}
-  if(doc.overflowed()){reply(503,"Memoria insufficiente");return;}
+  if(doc.overflowed()){reply(503,"Memoria insufficiente","Not enough memory");return;}
   String body;serializeJson(doc,body);server.sendHeader("Cache-Control","no-store");server.send(200,"application/json",body);
 }
 // Truncates on a UTF-8 character boundary.
@@ -321,14 +336,14 @@ void copyName(char* out,size_t cap,const char* in){
 void configApi(){
   if(!protect())return;
   StaticJsonDocument<1536> doc;
-  if(deserializeJson(doc,server.arg("plain"))){reply(400,"Dati non validi");return;}
+  if(deserializeJson(doc,server.arg("plain"))){reply(400,"Dati non validi","Invalid data");return;}
   JsonArray list=doc["cats"].as<JsonArray>();
-  if(list.isNull() || list.size()>size_t(Litter::MAX_CATS)){reply(400,"Massimo 4 gatti");return;}
+  if(list.isNull() || list.size()>size_t(Litter::MAX_CATS)){reply(400,"Massimo 4 gatti","At most 4 cats");return;}
   Litter::Settings next;Litter::defaults(next);
   int8_t from[Litter::MAX_CATS];bool taken[Litter::MAX_CATS]{};
   for(JsonObject c:list){
     const char* name=c["name"]|"";uint32_t weight=c["weight_g"]|0u;
-    if(!*name || weight<500 || weight>20000){reply(400,"Ogni gatto richiede un nome e un peso fra 0,5 e 20 kg");return;}
+    if(!*name || weight<500 || weight>20000){reply(400,"Ogni gatto richiede un nome e un peso fra 0,5 e 20 kg","Each cat needs a name and a weight between 0.5 and 20 kg");return;}
     // "from": index this cat had before the edit, so its visits and weight history follow it.
     int previous=c["from"]|-1;
     if(previous<0 || previous>=cats.catCount || taken[previous])previous=-1;else taken[previous]=true;
@@ -337,22 +352,21 @@ void configApi(){
     copyName(cat.name,sizeof(cat.name),name);cat.weightG=uint16_t(weight);cat.color=uint8_t((c["color"]|0u)%6);
   }
   next.toleranceG=Litter::clampU16(doc["tolerance_g"]|uint32_t(cats.toleranceG),100,3000);
-  next.gramsPerVisit=Litter::clampU16(doc["grams_per_visit"]|uint32_t(cats.gramsPerVisit),5,500);
-  next.binLimitG=Litter::clampU16(doc["bin_limit_g"]|uint32_t(cats.binLimitG),100,20000);
+  next.binLimitVisits=Litter::clampU16(doc["bin_limit_visits"]|uint32_t(cats.binLimitVisits),5,500);
   Litter::remapCats(history,weights,weightScratch,from,next.catCount);
   cats=next;Litter::rematch(cats,history);saveCats();saveVisits();prefs.putBytes("weights",&weights,sizeof(weights));
-  reply(200,"Impostazioni salvate");
+  reply(200,"Impostazioni salvate","Settings saved");
 }
 void visitApi(){
   if(!protect())return;
   uint32_t id;
   Litter::Visit* v=parseUnsigned(server.arg("id"),id)&&id<=65535?Litter::find(history,uint16_t(id)):nullptr;
-  if(!v){reply(404,"Visita non trovata");return;}
+  if(!v){reply(404,"Visita non trovata","Visit not found");return;}
   String cat=server.arg("cat");uint32_t index;
   if(cat=="delete"){
-    // Only visits after the last bin change are part of the current estimate.
-    if(!(v->epoch && bin.since && v->epoch<bin.since)){bin.wasteG-=min(bin.wasteG,uint32_t(v->wasteG));if(bin.visits)bin.visits--;}
-    Litter::remove(history,uint16_t(id));saveVisits();reply(200,"Visita eliminata");return;
+    // Only visits after the last bag change are part of the current count.
+    if(!(v->epoch && bin.since && v->epoch<bin.since) && bin.visits)bin.visits--;
+    Litter::remove(history,uint16_t(id));saveVisits();reply(200,"Visita eliminata","Visit deleted");return;
   }
   if(cat=="-1")v->cat=Litter::CAT_UNKNOWN;
   else if(parseUnsigned(cat,index) && index<cats.catCount){
@@ -361,49 +375,62 @@ void visitApi(){
     uint16_t reference=cats.cats[index].weightG;
     uint32_t distance=v->weightG>reference?v->weightG-reference:reference-v->weightG;
     if(changed && distance<=2u*cats.toleranceG)learnWeight(v->cat,v->weightG,v->epoch);
-  }else{reply(400,"Gatto non valido");return;}
-  v->flags|=Litter::VISIT_MANUAL;saveVisits();reply(200,"Visita aggiornata");
+  }else{reply(400,"Gatto non valido","Invalid cat");return;}
+  v->flags|=Litter::VISIT_MANUAL;saveVisits();reply(200,"Visita aggiornata","Visit updated");
 }
 void page(const char* html){
-  if(!allowedHost()){reply(403,"Host non ammesso");return;}
+  if(!allowedHost()){reply(403,"Host non ammesso","Host not allowed");return;}
   server.sendHeader("X-Frame-Options","DENY");server.sendHeader("Cache-Control","no-store");server.send_P(200,"text/html; charset=utf-8",html);
 }
+// Icons for "Add to Home Screen": no host check, they reveal nothing.
+void icon(const uint8_t* png,size_t size){
+  server.sendHeader("Cache-Control","max-age=604800");server.send_P(200,"image/png",(const char*)png,size);
+}
+const char MANIFEST[] PROGMEM = R"J({"name":"Tonepie","short_name":"Tonepie","start_url":"/","scope":"/","display":"standalone",
+"background_color":"#f4efe8","theme_color":"#f4efe8","icons":[{"src":"/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any maskable"},
+{"src":"/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}]})J";
 void setupWeb(){
-  const char* headers[]={"X-Tonepie-Token","X-Tonepie-Ota"};server.collectHeaders(headers,2);
+  const char* headers[]={"X-Tonepie-Token","X-Tonepie-Ota","X-Tonepie-Lang"};server.collectHeaders(headers,3);
   server.on("/",HTTP_GET,[]{page(HOME_UI);});
   server.on("/dev",HTTP_GET,[]{page(WEB_UI);}); // MCU developer page: not linked from the home
+  server.on("/apple-touch-icon.png",HTTP_GET,[]{icon(ICON_180,sizeof(ICON_180));});
+  server.on("/apple-touch-icon-precomposed.png",HTTP_GET,[]{icon(ICON_180,sizeof(ICON_180));});
+  server.on("/icon-192.png",HTTP_GET,[]{icon(ICON_192,sizeof(ICON_192));});
+  server.on("/icon-512.png",HTTP_GET,[]{icon(ICON_512,sizeof(ICON_512));});
+  server.on("/manifest.webmanifest",HTTP_GET,[]{server.sendHeader("Cache-Control","max-age=86400");server.send_P(200,"application/manifest+json",MANIFEST);});
   server.on("/api/state",HTTP_GET,stateApi);
   server.on("/api/home",HTTP_GET,homeApi);
   server.on("/api/config",HTTP_POST,configApi);
   server.on("/api/visit",HTTP_POST,visitApi);
-  server.on("/api/litter",HTTP_POST,[]{if(!protect())return;litterAt=epochNow();prefs.putUInt("litterAt",litterAt);reply(200,"Aggiunta di lettiera registrata");});
-  server.on("/api/bin/reset",HTTP_POST,[]{if(!protect())return;bin.wasteG=0;bin.visits=0;bin.since=epochNow();saveVisits();reply(200,"Cassetto svuotato: conteggio azzerato");});
+  server.on("/api/litter",HTTP_POST,[]{if(!protect())return;litterAt=epochNow();prefs.putUInt("litterAt",litterAt);reply(200,"Aggiunta di lettiera registrata","Litter top-up recorded");});
+  server.on("/api/bin/reset",HTTP_POST,[]{if(!protect())return;bin.visits=0;bin.since=epochNow();saveVisits();reply(200,"Cassetto svuotato: conteggio azzerato","Bin emptied: count reset");});
   server.on("/api/arm",HTTP_POST,[]{if(!protect())return;
-    if(server.arg("enabled")!="0" && server.arg("enabled")!="1"){reply(400,"Parametro non valido");return;}
-    armed=server.arg("enabled")=="1";armSince=millis();reply(200,armed?"Invii abilitati per 10 minuti; verifica i DP sulla tua revisione":"Invii disabilitati");});
-  server.on("/api/query",HTTP_POST,[]{if(!protect())return;if(!online()){reply(409,"MCU offline");return;}sendFrame(8);reply(200,"Query inviata");});
+    if(server.arg("enabled")!="0" && server.arg("enabled")!="1"){reply(400,"Parametro non valido","Invalid parameter");return;}
+    armed=server.arg("enabled")=="1";armSince=millis();reply(200,armed?"Invii abilitati per 10 minuti; verifica i DP sulla tua revisione":"Invii disabilitati",
+      armed?"Sending enabled for 10 minutes; check the DPs on your unit":"Sending disabled");});
+  server.on("/api/query",HTTP_POST,[]{if(!protect())return;if(!online()){reply(409,"MCU offline","MCU offline");return;}sendFrame(8);reply(200,"Query inviata","Query sent");});
   server.on("/api/command",HTTP_POST,[]{if(!protect())return;String action=server.arg("action");
     if(action=="clean")writeDp(101,1,1);else if(action=="empty")writeDp(102,1,1);
     else if(action=="auto_on")writeDp(105,1,1);else if(action=="auto_off")writeDp(105,1,0);
     else if(action=="bag")writeDp(127,1,1);else if(action=="level")writeDp(126,1,1);
     else if(action=="odor_on")writeDp(129,1,1);else if(action=="odor_off")writeDp(129,1,0);
-    else reply(400,"Comando non ammesso");});
+    else reply(400,"Comando non ammesso","Command not allowed");});
   server.on("/api/value",HTTP_POST,[]{if(!protect())return;uint32_t id,value;
     if(!parseUnsigned(server.arg("dp"),id)||!parseUnsigned(server.arg("value"),value)||
-      (id!=117 && id!=118)||value>(id==117?60u:120u)){reply(400,"Intervallo valido: DP117 0-60; DP118 0-120 minuti");return;}
+      (id!=117 && id!=118)||value>(id==117?60u:120u)){reply(400,"Intervallo valido: DP117 0-60; DP118 0-120 minuti","Valid range: DP117 0-60; DP118 0-120 minutes");return;}
     writeDp(uint8_t(id),2,value);});
   // New home Wi-Fi credentials, e.g. after changing router. Wrong ones bring the recovery network back.
   server.on("/api/wifi",HTTP_POST,[]{if(!protect())return;
-    if(server.header("X-Tonepie-Ota")!=Config::OTA_PASSWORD){reply(403,"Password di aggiornamento errata");return;}
+    if(server.header("X-Tonepie-Ota")!=Config::OTA_PASSWORD){reply(403,"Password di aggiornamento errata","Wrong update password");return;}
     String ssid=server.arg("ssid"),password=server.arg("password");
-    if(ssid.isEmpty() || ssid.length()>32 || password.length()<8 || password.length()>63){reply(400,"Nome rete fino a 32 caratteri, password da 8 a 63");return;}
+    if(ssid.isEmpty() || ssid.length()>32 || password.length()<8 || password.length()>63){reply(400,"Nome rete fino a 32 caratteri, password da 8 a 63","Network name up to 32 characters, password 8 to 63");return;}
     prefs.putString("ssid",ssid);prefs.putString("wpass",password);
-    reply(200,"Rete salvata: riavvio. Se non si collega entro 3 minuti riappare la rete Tonepie-Setup");delay(400);ESP.restart();});
+    reply(200,"Rete salvata: riavvio. Se non si collega entro 3 minuti riappare la rete Tonepie-Setup","Network saved: restarting. If it cannot connect within 3 minutes the Tonepie-Setup network comes back");delay(400);ESP.restart();});
   // Firmware update over the network: multipart upload, written straight to the spare app partition.
   server.on("/api/update",HTTP_POST,[]{
-    if(!otaAllowed){reply(403,"Aggiornamento rifiutato: password o sessione non valide");return;}
-    if(!otaOk){reply(500,String("Aggiornamento fallito: ")+Update.errorString());return;}
-    reply(200,"Aggiornamento riuscito: riavvio in corso");delay(400);ESP.restart();
+    if(!otaAllowed){reply(403,"Aggiornamento rifiutato: password o sessione non valide","Update refused: wrong password or session");return;}
+    if(!otaOk){reply(500,String("Aggiornamento fallito: ")+Update.errorString(),String("Update failed: ")+Update.errorString());return;}
+    reply(200,"Aggiornamento riuscito: riavvio in corso","Update done: restarting");delay(400);ESP.restart();
   },[]{
     HTTPUpload& upload=server.upload();
     if(upload.status==UPLOAD_FILE_START){
@@ -419,7 +446,7 @@ void setupWeb(){
       if(otaAllowed)Update.abort();otaOk=false;
     }
   });
-  server.onNotFound([]{reply(404,"Risorsa non trovata");});server.begin();
+  server.onNotFound([]{reply(404,"Risorsa non trovata","Not found");});server.begin();
 }
 void setup(){
   Serial.setTxBufferSize(1024);
@@ -464,7 +491,7 @@ void loop(){
     queryScheduled=true;queryDue=now+500;
   }
   if(queryScheduled && int32_t(now-queryDue)>=0){queryScheduled=false;if(online())sendFrame(8);}
-  if(pending.active && uint32_t(now-pending.since)>=5000){pending.active=false;commandStatus="Report atteso non ricevuto: esito sconosciuto (nessun reinvio automatico)";logLine(commandStatus);}
+  if(pending.active && uint32_t(now-pending.since)>=5000){pending.active=false;commandIt="Report atteso non ricevuto: esito sconosciuto (nessun reinvio automatico)";commandEn="Expected report not received: result unknown (no automatic resend)";logLine(commandIt);}
   if(armed && !isArmed())armed=false;
   serviceTracker(now);
   server.handleClient();delay(1);

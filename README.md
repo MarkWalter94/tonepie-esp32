@@ -4,12 +4,12 @@ Replace the Tuya Wi-Fi module (WBR3) of a **Tonepie Ti Pro 25 / TPCBP-T2501** se
 
 | | |
 |---|---|
-| **Home page** (`/`) | Cats recognised by weight, visits today and over the last 7 days, weight trend chart, waste-bin estimate, recent visits, maintenance buttons, litter box settings |
+| **Home page** (`/`) | Cats recognised by weight, visits today and over the last 7 days (tap a cat for its visits day by day), weight trend chart, visits since the last bag change, recent visits, maintenance buttons, litter box settings |
 | **Developer page** (`/dev`) | Raw datapoints, serial log, parser statistics, guarded manual commands, firmware update, Wi-Fi settings |
 | **Updates** | Over the air from the LAN (`tools/ota.py` or the `/dev` page) |
 | **Recovery** | Own Wi-Fi network `Tonepie-Setup` when the home Wi-Fi is unreachable |
 
-The web pages are in Italian (they were written for one household). All code, comments and documentation are in English.
+The web pages are in Italian and English: the **IT/EN** button switches language (remembered by the browser, shared by both pages; the default follows the browser). The home page can be added to the phone's home screen and gets its own icon (`tools/make_icons.py` draws it into `include/icons.h`). All code, comments and documentation are in English.
 
 > **Status.** The firmware runs on the real unit: handshake, datapoint reads and the pages are verified. Physical commands (clean, empty, level, bag change), the settings writes and the visit detection have **not** been exercised with the litter box assembled yet. See [VALIDATION.md](VALIDATION.md) for exactly what was and was not tested.
 
@@ -126,7 +126,7 @@ After 3 minutes without a connection (router replaced, password changed, network
 
 - SSID **`Tonepie-Setup`**, password = the Wi-Fi password compiled into the firmware;
 - open **`http://192.168.4.1`** (home) or **`http://192.168.4.1/dev`**;
-- from `/dev` upload a firmware or enter the new home Wi-Fi credentials (section *Rete Wi-Fi*, update password required). Wrong credentials simply bring the recovery network back after 3 minutes.
+- from `/dev` upload a firmware or enter the new home Wi-Fi credentials (section *Wi-Fi network*, update password required). Wrong credentials simply bring the recovery network back after 3 minutes.
 
 The recovery network switches itself off as soon as the home Wi-Fi is back and nobody is connected to it. Credentials saved from `/dev` override the compiled ones and survive updates. Bluetooth is deliberately not used: the C3 only has BLE, which would need a dedicated app for updates.
 
@@ -134,11 +134,11 @@ The recovery network switches itself off as soon as the home Wi-Fi is back and n
 
 1. Tap the gear and enter each cat's name and weight (up to four). The reference weight follows the cat over time: every recognised visit moves it one fifth of the way towards the measured value.
 2. Visits appear in the list as they happen. Tap one to correct the cat (or delete it if it was not a visit); corrections also teach the new weight.
-3. The **waste bin** card shows the estimate described below; **Cambio sacchetto** (bag change) resets it and tells the MCU about the new bag.
-4. **Pulisci ora** starts a cleaning cycle; **Aggiunta lettiera** (litter added) records the date and asks the MCU to level the litter. Both ask for confirmation and are refused when a cat is detected inside, a fault is active or the child lock is on.
-5. The *Lettiera* section of the settings changes three values kept by the MCU: automatic cleaning, the delay before cleaning (0–60 min) and automatic deodorising after cleaning. Only changed values are sent, and the page checks that the MCU reports them back.
+3. The **bin** card counts the visits since the last bag change against a limit (default 30, in the settings) and warns at 80% and 100%; **Bag change** resets the count and tells the MCU about the new bag.
+4. **Clean now** starts a cleaning cycle; **Litter added** records the date and asks the MCU to level the litter. Both ask for confirmation and are refused when a cat is detected inside, a fault is active or the child lock is on.
+5. The *Litter box* section of the settings changes three values kept by the MCU: automatic cleaning, the delay before cleaning (0–60 min) and automatic deodorising after cleaning. Only changed values are sent, and the page checks that the MCU reports them back.
 
-The **weight trend** chart plots each cat's daily average weight over 30 or 90 days, with a table view for the exact values.
+Tapping a cat opens its **visits day by day**, back to the oldest visit kept (the history holds the last 64 visits of all cats). The **weight trend** chart plots each cat's daily average weight over 30 or 90 days, with a table view for the exact values.
 
 ### Cat recognition
 
@@ -148,9 +148,9 @@ A visit's weight is compared with the reference weights: the nearest cat within 
 
 Per the community mapping, the MCU reports three things around a visit: the day's visit counter (DP7), the cat weight (DP6) and the visit duration (DP8). Their order and timing on the real unit are not verified, so any of them opens a visit and the others are merged if they arrive within 15 minutes; values repeated inside a query response never create visits, and visits missed while the ESP was off are recovered from the counter at boot. Logic in `include/litter_logic.h`, tests in `test/litter_test.cpp`.
 
-### The waste-bin estimate, and why it is an estimate
+### Why the bin counts visits, not grams
 
-The Tuya protocol exposes **no scale reading**: the MCU only sends the cat's weight after a visit, and there is no command to read the load cells. The bin content is therefore *visits × grams per visit* (default 50 g, configurable), shown as an estimate. Measuring waste for real (weight before and after each visit, and total since the last bag change) needs the ESP to listen directly to the HX711 load-cell amplifier on the main board; that extension is planned but not part of this firmware yet. The MCU's own bin-full logic (based on the number of cleanings, DP123/124) is untouched and keeps working.
+The Tuya protocol exposes **no scale reading**: the MCU only sends the cat's weight after a visit, and there is no command to read the load cells. An estimate in grams would only be *visits × a guess*, so the page shows the real number of visits instead. Measuring waste for real (weight before and after each visit, and total since the last bag change) needs the ESP to listen directly to the HX711 load-cell amplifier on the main board; that extension is planned but not part of this firmware yet. The MCU's own bin-full logic (based on the number of cleanings, DP123/124) is untouched and keeps working.
 
 ## Datapoints
 
@@ -201,8 +201,9 @@ include/config.h           pins, timings, network names
 include/secrets.example.h  template for secrets.h (passwords, not in git)
 include/tuya_protocol.h    Tuya MCU frame encoder/parser, Arduino-independent
 include/litter_logic.h     cat matching, visit detection, weight log, Arduino-independent
-include/web_home.h         home page (embedded HTML, Italian)
-include/web_ui.h           developer page (embedded HTML, Italian)
+include/web_home.h         home page (embedded HTML, Italian/English)
+include/web_ui.h           developer page (embedded HTML, Italian/English)
+include/icons.h            home-screen icons (generated by tools/make_icons.py)
 src/main.cpp               UART, init, HTTP API, NVS storage, OTA, recovery network
 test/protocol_test.cpp     host tests for the protocol
 test/litter_test.cpp       host tests for recognition and visit detection
@@ -223,13 +224,13 @@ Page preview without hardware: `python tools/preview.py`, then open `http://loca
 
 ## HTTP API
 
-All `POST` requests need the `X-Tonepie-Token` header with the token returned by `GET /api/state` or `GET /api/home`; `/api/update` and `/api/wifi` also need `X-Tonepie-Ota`.
+All `POST` requests need the `X-Tonepie-Token` header with the token returned by `GET /api/state` or `GET /api/home`; `/api/update` and `/api/wifi` also need `X-Tonepie-Ota`. Messages are in Italian unless the request carries `X-Tonepie-Lang: en`.
 
 | Endpoint | Purpose |
 |---|---|
 | `GET /api/home` | data for the home page |
 | `GET /api/state` | raw datapoints, log, parser statistics |
-| `POST /api/config` | cats and estimate settings (JSON body) |
+| `POST /api/config` | cats, tolerance and bin limit in visits (JSON body) |
 | `POST /api/visit` | reassign or delete a visit (`id`, `cat` or `delete`) |
 | `POST /api/bin/reset`, `POST /api/litter` | record a bag change / litter top-up |
 | `POST /api/arm` | enable sends for 10 minutes (`enabled=1/0`) |

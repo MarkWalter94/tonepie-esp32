@@ -39,7 +39,9 @@ int main() {
   assert(find(h, 7)->cat == 0 && !(find(h, 7)->flags & VISIT_MANUAL)); // cat 1 removed: back to automatic
 
   // Sanitize rejects garbage
-  Settings bad; memset(&bad, 0xff, sizeof(bad)); sanitize(bad); assert(bad.catCount == 0 && bad.binLimitG == 1500);
+  Settings bad; memset(&bad, 0xff, sizeof(bad)); sanitize(bad); assert(bad.catCount == 0 && bad.binLimitVisits == 30);
+  Settings old = twoCats(); old.version = 1; old.reserved = 50; old.binLimitVisits = 2000; // 1.x: 2000 g at 50 g/visit
+  sanitize(old); assert(old.version == 2 && old.binLimitVisits == 40 && old.catCount == 2 && old.reserved == 0);
   History hb; memset(&hb, 0xff, sizeof(hb)); sanitize(hb); assert(hb.count == 0);
 
   // Weight log: daily average, late samples, ring, and following the cat over time

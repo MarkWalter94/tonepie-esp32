@@ -14,12 +14,12 @@ constexpr uint8_t VISIT_MANUAL = 1; // assigned by hand: never re-matched
 struct Cat { char name[24]; uint16_t weightG; uint8_t color, reserved; };
 struct Settings {
   uint8_t version, catCount;
-  uint16_t toleranceG, gramsPerVisit, binLimitG;
+  uint16_t toleranceG, reserved, binLimitVisits; // version 1 had grams per visit and a limit in grams here
   Cat cats[MAX_CATS];
 };
 struct Visit {
   uint32_t epoch;      // 0 = clock not available when recorded
-  uint16_t id, weightG, durationS, wasteG;
+  uint16_t id, weightG, durationS, reserved;
   int8_t cat;
   uint8_t flags;
 };
@@ -27,15 +27,17 @@ struct History { uint16_t nextId; uint16_t count; Visit v[MAX_VISITS]; }; // old
 
 inline void defaults(Settings& s) {
   memset(&s, 0, sizeof(s));
-  s.version = 1; s.toleranceG = 500; s.gramsPerVisit = 50; s.binLimitG = 1500;
+  s.version = 2; s.toleranceG = 500; s.binLimitVisits = 30;
 }
 inline uint16_t clampU16(uint32_t v, uint16_t lo, uint16_t hi) { return v < lo ? lo : v > hi ? hi : uint16_t(v); }
 // Makes data loaded from flash safe to use whatever it contains.
 inline void sanitize(Settings& s) {
-  if (s.version != 1 || s.catCount > MAX_CATS) { defaults(s); return; }
+  if (s.version == 1 && s.catCount <= MAX_CATS) { // grams limit / grams per visit -> visits
+    s.binLimitVisits = s.binLimitVisits / (s.reserved ? s.reserved : 50); s.reserved = 0; s.version = 2;
+  }
+  if (s.version != 2 || s.catCount > MAX_CATS) { defaults(s); return; }
   s.toleranceG = clampU16(s.toleranceG, 100, 3000);
-  s.gramsPerVisit = clampU16(s.gramsPerVisit, 5, 500);
-  s.binLimitG = clampU16(s.binLimitG, 100, 20000);
+  s.binLimitVisits = clampU16(s.binLimitVisits, 5, 500);
   for (auto& c : s.cats) c.name[sizeof(c.name) - 1] = 0;
 }
 inline void sanitize(History& h) {

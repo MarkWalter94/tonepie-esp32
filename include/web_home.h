@@ -6,7 +6,7 @@ const char HOME_UI[] PROGMEM = R"HTML(<!doctype html>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#f4efe8" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#151210" media="(prefers-color-scheme: dark)">
-<title>Lettiera</title>
+<title>Tonepie</title>
 <style>
 :root{--bg:#f4efe8;--bg2:#fbe9dc;--card:#fffdfa;--ink:#2a2420;--muted:#8c8178;--line:#ece4da;--soft:#f3ece3;
 --accent:#d9694a;--ok:#4f9a76;--warn:#dd9a2f;--bad:#cf4f3c;--shadow:0 1px 2px rgba(70,45,25,.05),0 12px 32px -12px rgba(70,45,25,.18)}
@@ -141,52 +141,133 @@ details{margin-top:14px}summary{cursor:pointer;font-weight:700;color:var(--muted
 .switch:checked{background:var(--ok)}.switch:checked::after{transform:translateX(20px)}.switch:disabled,.field:has(input:disabled){opacity:.45;cursor:not-allowed}
 #toast{position:fixed;left:50%;bottom:max(22px,env(safe-area-inset-bottom));transform:translate(-50%,90px);background:var(--ink);color:var(--bg);padding:12px 20px;border-radius:99px;font-weight:650;font-size:14.5px;transition:transform .3s cubic-bezier(.2,.8,.2,1);max-width:calc(100vw - 32px);text-align:center;z-index:9;pointer-events:none}
 #toast.on{transform:translate(-50%,0)}
+@media (max-width:420px){h1{font-size:28px}}
 @media (max-width:380px){.big strong{font-size:38px}.ring{width:100px;height:100px}.bin-main{font-size:24px}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
-</style></head><body><main>
-<header><div><p class="eyebrow">Tonepie Ti Pro</p><h1>Lettiera</h1></div>
-<div class="head-right"><span id="status" class="pill"><i></i><span>Collegamento…</span></span>
-<button class="icon-btn" id="gear" aria-label="Impostazioni"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.8 1.2V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-2.9-1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.7 1.7 0 0 0 3.100 14H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.200-2.900l-.1-.1a2 2 0 1 1 2.800-2.800l.1.1a1.7 1.7 0 0 0 2.900-1.200V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 2.900 1.200l.1-.1a2 2 0 1 1 2.800 2.800l-.1.1a1.7 1.7 0 0 0 1.200 2.900H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.500 1z"/></svg></button></div></header>
+/* language, cat popup */
+.lang{height:40px;min-width:40px;padding:0 11px;border:0;border-radius:99px;background:var(--card);box-shadow:var(--shadow);font-weight:800;font-size:13px;letter-spacing:.06em;color:var(--muted);cursor:pointer}
+#cats .cat{cursor:pointer;transition:transform .12s}#cats .cat:active{transform:scale(.985)}
+.cat h2::after{content:" \203A";color:var(--muted);font-weight:600}
+.cat-head{display:flex;align-items:center;gap:12px}.cat-head .avatar{--s:52px}
+.stats{display:flex;gap:10px;margin:16px 0 8px}.stats div{flex:1;background:var(--soft);border-radius:16px;padding:10px 12px}
+.stats b{display:block;font-size:22px;font-weight:800;letter-spacing:-.02em}.stats span{font-size:12.5px;color:var(--muted)}
+.drow{display:grid;grid-template-columns:minmax(0,9.5em) 1fr 2.2em;align-items:center;gap:12px;padding:7px 2px;border-bottom:1px solid var(--line);font-size:14.5px}
+.drow:last-child{border:0}.drow span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.drow.zero{color:var(--muted)}
+.drow i{display:block;height:10px;border-radius:5px;background:var(--c);min-width:3px}.drow.zero i{background:var(--line)}
+.drow b{text-align:right;font-variant-numeric:tabular-nums}
+</style>
+<link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="icon" type="image/png" href="/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Tonepie">
+</head><body><main>
+<header><div><p class="eyebrow">Tonepie Ti Pro</p><h1 data-t="title"></h1></div>
+<div class="head-right"><span id="status" class="pill"><i></i><span></span></span>
+<button class="lang" id="lang"></button>
+<button class="icon-btn" id="gear" data-t-aria="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.8 1.2V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-2.9-1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.7 1.7 0 0 0 3.100 14H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.200-2.900l-.1-.1a2 2 0 1 1 2.800-2.800l.1.1a1.7 1.7 0 0 0 2.900-1.200V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 2.900 1.200l.1-.1a2 2 0 1 1 2.800 2.800l-.1.1a1.7 1.7 0 0 0 1.200 2.900H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.500 1z"/></svg></button></div></header>
 <div id="alerts"></div>
 <section id="cats"></section>
 <section class="card bin" id="bin" hidden>
   <div class="ring"><svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="50"/><circle class="fill" id="ringFill" cx="60" cy="60" r="50" stroke-dasharray="314.16" stroke-dashoffset="314.16"/></svg><b id="ringPct">0%</b></div>
-  <div><h2>CASSETTO · STIMA</h2><p class="bin-main"><b id="binG">0 g</b> <span id="binOf"></span></p><p class="muted small" id="binSub"></p></div>
+  <div><h2 data-t="binTitle"></h2><p class="bin-main"><b id="binN">0</b> <span id="binOf"></span></p><p class="muted small" id="binSub"></p></div>
 </section>
-<section class="card trend" id="trend" hidden><div class="section-title"><h2>Andamento peso</h2>
-  <div class="seg" role="group" aria-label="Periodo"><button data-range="30" aria-pressed="true">30 gg</button><button data-range="90" aria-pressed="false">90 gg</button></div></div>
+<section class="card trend" id="trend" hidden><div class="section-title"><h2 data-t="trend"></h2>
+  <div class="seg" role="group" data-t-aria="period"><button data-range="30" aria-pressed="true" data-t="d30"></button><button data-range="90" aria-pressed="false" data-t="d90"></button></div></div>
   <div class="legend" id="legend"></div><div class="plot" id="plot"></div>
-  <details id="trendTable"><summary>Vedi i valori</summary><div id="trendRows"></div></details></section>
-<section class="card" id="visitsCard" hidden><div class="section-title"><h2>Ultime visite</h2><span class="muted small" id="visitsHint"></span></div><div id="visits"></div></section>
+  <details id="trendTable"><summary data-t="showValues"></summary><div id="trendRows"></div></details></section>
+<section class="card" id="visitsCard" hidden><div class="section-title"><h2 data-t="recent"></h2><span class="muted small" id="visitsHint"></span></div><div id="visits"></div></section>
 <section class="tiles" id="cleanWrap" hidden>
-  <button class="tile card" id="clean"><span class="ico"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.800 5.200L19 9l-5.200 1.800L12 16l-1.800-5.200L5 9l5.200-1.800zM19 15l.9 2.600 2.600.9-2.600.9L19 22l-.9-2.600-2.600-.9 2.600-.9zM5 15l.7 2 2 .7-2 .7L5 20.500l-.7-2.100-2-.7 2-.7z"/></svg></span><b>Pulisci ora</b><small>avvia un ciclo</small></button>
-  <button class="tile card" id="bag"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 7c-1-1.500-1-3 0-4h6c1 1 1 2.500 0 4M7 7h10l2 11a2.500 2.500 0 0 1-2.500 3h-9A2.500 2.500 0 0 1 5 18z"/></svg></span><b>Cambio sacchetto</b><small id="bagSub"></small></button>
-  <button class="tile card" id="litter"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v8M8 7h8M3 17c2-2 4-2 6 0s4 2 6 0 4-2 6 0M3 21h18"/></svg></span><b>Aggiunta lettiera</b><small id="litterSub"></small></button>
+  <button class="tile card" id="clean"><span class="ico"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.800 5.200L19 9l-5.200 1.800L12 16l-1.800-5.200L5 9l5.200-1.800zM19 15l.9 2.600 2.600.9-2.600.9L19 22l-.9-2.600-2.600-.9 2.600-.9zM5 15l.7 2 2 .7-2 .7L5 20.500l-.7-2.100-2-.7 2-.7z"/></svg></span><b data-t="cleanNow"></b><small data-t="cleanSub"></small></button>
+  <button class="tile card" id="bag"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 7c-1-1.500-1-3 0-4h6c1 1 1 2.500 0 4M7 7h10l2 11a2.500 2.500 0 0 1-2.500 3h-9A2.500 2.500 0 0 1 5 18z"/></svg></span><b data-t="bag"></b><small id="bagSub"></small></button>
+  <button class="tile card" id="litter"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v8M8 7h8M3 17c2-2 4-2 6 0s4 2 6 0 4-2 6 0M3 21h18"/></svg></span><b data-t="litter"></b><small id="litterSub"></small></button>
 </section>
 <footer id="foot"></footer>
 </main>
 <dialog id="dlgSettings"><form class="sheet" method="dialog" id="formSettings">
-  <h2>I tuoi gatti</h2><p>Li riconosco dal peso a ogni visita. Il peso di riferimento si aggiorna da solo, così continuo a riconoscerli anche se crescono o dimagriscono.</p>
-  <div id="catEditors"></div><p class="hint" id="closeHint" hidden>Pesi molto vicini: il riconoscimento potrebbe confonderli.</p>
-  <button type="button" class="btn" id="addCat">+ Aggiungi gatto</button>
-  <h3 class="sub">Lettiera</h3><p class="hint" id="mcuNote" hidden>Lettiera non collegata: queste tre impostazioni non si possono cambiare ora.</p>
-    <div class="opt"><label for="mAuto">Pulizia automatica<small>Dopo ogni visita svuota da sola nel cassetto</small></label><input class="switch" type="checkbox" id="mAuto"></div>
-    <div class="opt"><label for="mWait">Pausa prima della pulizia<small>Minuti di attesa dopo l’uscita del gatto</small></label><div class="field"><input id="mWait" type="number" min="0" max="60" step="1" inputmode="numeric"><span>min</span></div></div>
-    <div class="opt"><label for="mOdor">Deodorante automatico<small>Si attiva da solo dopo ogni pulizia</small></label><input class="switch" type="checkbox" id="mOdor"></div>
-  <details><summary>Cassetto e riconoscimento</summary>
-    <div class="opt"><label>Cassetto pieno a<small>Peso di escrementi oltre il quale va svuotato</small></label><div class="field"><input id="optLimit" type="number" min="100" max="20000" step="50" required><span>g</span></div></div>
-    <div class="opt"><label>Peso stimato per visita<small>La lettiera non pesa gli escrementi: uso questa media</small></label><div class="field"><input id="optGrams" type="number" min="5" max="500" step="5" required><span>g</span></div></div>
-    <div class="opt"><label>Tolleranza sul peso<small>Scarto massimo dal peso del gatto</small></label><div class="field"><input id="optTol" type="number" min="0.1" max="3" step="0.1" required><span>kg</span></div></div>
+  <h2 data-t="yourCats"></h2><p data-t="yourCatsText"></p>
+  <div id="catEditors"></div><p class="hint" id="closeHint" data-t="closeHint" hidden></p>
+  <button type="button" class="btn" id="addCat" data-t="addCat"></button>
+  <h3 class="sub" data-t="boxTitle"></h3><p class="hint" id="mcuNote" data-t="mcuNote" hidden></p>
+    <div class="opt"><label for="mAuto"><span data-t="auto"></span><small data-t="autoSub"></small></label><input class="switch" type="checkbox" id="mAuto"></div>
+    <div class="opt"><label for="mWait"><span data-t="wait"></span><small data-t="waitSub"></small></label><div class="field"><input id="mWait" type="number" min="0" max="60" step="1" inputmode="numeric"><span>min</span></div></div>
+    <div class="opt"><label for="mOdor"><span data-t="odor"></span><small data-t="odorSub"></small></label><input class="switch" type="checkbox" id="mOdor"></div>
+  <details><summary data-t="binDetails"></summary>
+    <div class="opt"><label for="optLimit"><span data-t="limit"></span><small data-t="limitSub"></small></label><div class="field"><input id="optLimit" type="number" min="5" max="500" step="1" inputmode="numeric" required><span data-t="visitsUnit"></span></div></div>
+    <div class="opt"><label for="optTol"><span data-t="tol"></span><small data-t="tolSub"></small></label><div class="field"><input id="optTol" type="number" min="0.1" max="3" step="0.1" required><span>kg</span></div></div>
   </details>
-  <div class="actions"><button type="button" class="btn ghost" data-close>Annulla</button><button class="btn primary" value="save">Salva</button></div>
+  <div class="actions"><button type="button" class="btn ghost" data-close data-t="cancel"></button><button class="btn primary" value="save" data-t="save"></button></div>
 </form></dialog>
-<dialog id="dlgVisit"><div class="sheet"><h2>Chi era?</h2><p id="visitInfo"></p><div class="choices" id="visitChoices"></div>
-  <div class="actions"><button class="btn ghost" data-close>Chiudi</button></div></div></dialog>
+<dialog id="dlgVisit"><div class="sheet"><h2 data-t="whoWas"></h2><p id="visitInfo"></p><div class="choices" id="visitChoices"></div>
+  <div class="actions"><button class="btn ghost" data-close data-t="close"></button></div></div></dialog>
+<dialog id="dlgCat"><div class="sheet"><div class="cat-head" id="catHead"></div><div class="stats" id="catStats"></div><div id="catDays"></div>
+  <p class="muted small" id="catNote" style="margin-top:10px"></p>
+  <div class="actions"><button class="btn ghost" data-close data-t="close"></button></div></div></dialog>
 <dialog id="dlgConfirm"><div class="sheet"><h2 id="cfTitle"></h2><p id="cfText"></p>
-  <div class="actions"><button class="btn ghost" data-close>Annulla</button><button class="btn primary" id="cfOk"></button></div></div></dialog>
+  <div class="actions"><button class="btn ghost" data-close data-t="cancel"></button><button class="btn primary" id="cfOk"></button></div></div></dialog>
 <div id="toast" role="status" aria-live="polite"></div>
 <script>
 const $=id=>document.getElementById(id);
+const plural=(n,one,many)=>n+' '+(n===1?one:many);
+const TEXT={
+it:{title:'Lettiera',settings:'Impostazioni',binTitle:'CASSETTO',trend:'Andamento peso',period:'Periodo',d30:'30 gg',d90:'90 gg',showValues:'Vedi i valori',recent:'Ultime visite',
+  cleanNow:'Pulisci ora',cleanSub:'avvia un ciclo',bag:'Cambio sacchetto',litter:'Aggiunta lettiera',
+  yourCats:'I tuoi gatti',yourCatsText:'Li riconosco dal peso a ogni visita. Il peso di riferimento si aggiorna da solo, così continuo a riconoscerli anche se crescono o dimagriscono.',
+  closeHint:'Pesi molto vicini: il riconoscimento potrebbe confonderli.',addCat:'+ Aggiungi gatto',boxTitle:'Lettiera',mcuNote:'Lettiera non collegata: queste tre impostazioni non si possono cambiare ora.',
+  auto:'Pulizia automatica',autoSub:'Dopo ogni visita svuota da sola nel cassetto',wait:'Pausa prima della pulizia',waitSub:'Minuti di attesa dopo l’uscita del gatto',
+  odor:'Deodorante automatico',odorSub:'Si attiva da solo dopo ogni pulizia',binDetails:'Cassetto e riconoscimento',limit:'Svuota il cassetto dopo',limitSub:'Visite dall’ultimo cambio sacchetto',visitsUnit:'visite',
+  tol:'Tolleranza sul peso',tolSub:'Scarto massimo dal peso del gatto',cancel:'Annulla',save:'Salva',whoWas:'Chi era?',close:'Chiudi',
+  connecting:'Collegamento…',offline:'Lettiera non collegata',fault:'Anomalia',catInside:'Gatto dentro',ready:'Pronta',booting:'Avvio…',unreachable:'Non raggiungibile',
+  faultAlert:c=>'La lettiera segnala un’anomalia (codice '+c+'). Controllala.',fullAlert:'È ora di svuotare il cassetto.',almostAlert:'Il cassetto è quasi pieno.',
+  welcome:'Chi usa la lettiera?',welcomeText:'Dimmi nome e peso dei tuoi gatti: li riconoscerò a ogni visita.',welcomeBtn:'Aggiungi i gatti',
+  visitsToday:n=>n===1?'visita oggi':'visite oggi',last:a=>'Ultima '+a,at:c=>' alle '+c,lastNoTime:'Ultima: orario non disponibile',noVisits:'Nessuna visita ancora',
+  nVisits:n=>plural(n,'visita','visite'),unknown:n=>n===1?'1 visita non riconosciuta':n+' visite non riconosciute',unknownSub:'Toccala nell’elenco per dirmi chi era.',
+  of:n=>'su '+n,binCount:n=>n===1?'visita':'visite',bagChanged:a=>'sacchetto cambiato '+a,left:n=>'ancora '+plural(n,'visita','visite'),
+  tapFix:'tocca per correggere',visitsEmpty:'Qui compariranno le visite dei tuoi gatti.',notRecognised:'Non riconosciuto',noData:'nessun dato',showLess:'Mostra meno',showAll:n=>'Mostra tutte ('+n+')',
+  justNow:'proprio adesso',bagWhen:a=>'ultimo '+a,litterWhen:a=>'ultima '+a,bagNever:'mai registrato',litterNever:'mai registrata',devPage:'Pagina sviluppatore',
+  now:'adesso',minAgo:n=>n+' min fa',hAgo:n=>n+' h fa',yesterday:'ieri',daysAgo:n=>n+' giorni fa',Today:'Oggi',Yesterday:'Ieri',noTime:'Orario non disponibile',
+  inDays:(d,n)=>' · '+d+' in '+n+' giorni',noWeight:'nessun dato',trendEmpty:'Il grafico comparirà dopo le prime visite riconosciute.',today:'oggi',chart:'Andamento del peso dei gatti in chilogrammi',day:'Giorno',
+  visitNoData:'Visita senza dati',dontKnow:'Non lo so',deleteVisit:'Non era una visita: elimina',name:'Nome',colour:n=>'Colore '+n,remove:'Rimuovi',
+  sending:'Invio le impostazioni alla lettiera…',confirmed:'La lettiera ha confermato le nuove impostazioni',notConfirmed:'La lettiera non ha confermato: riapri le impostazioni per controllare',
+  drum:' Il tamburo potrebbe muoversi: controlla che nessun gatto sia dentro.',notReady:' La lettiera non è pronta, quindi per ora lo registro soltanto.',refused:m=>'Registrato, ma la lettiera ha rifiutato: '+m,
+  bagDone:'Conteggio azzerato e lettiera avvisata',bagText:'Azzero il conteggio del cassetto e avviso la lettiera che il sacchetto è nuovo.',bagOk:'Sacchetto cambiato',
+  litterDone:'Registrato: la lettiera livella la sabbia',litterText:'Registro la data e chiedo alla lettiera di livellare la sabbia nuova.',litterOk:'Lettiera aggiunta',
+  cleanAsk:'Avvio la pulizia?',cleanText:'Il tamburo ruoterà. Controlla che nessun gatto sia dentro o stia entrando.',cleanSent:'Pulizia richiesta alla lettiera',unreachableApi:'Lettiera non raggiungibile',
+  dayByDay:'Visite giorno per giorno',total:'visite',perDay:'al giorno',lastDays:n=>'negli ultimi '+n+' giorni',untimed:n=>plural(n,'visita','visite')+' senza orario non incluse.',
+  keeps:'Lo storico conserva le ultime 64 visite di tutti i gatti.',tapCat:'Tocca un gatto per le visite giorno per giorno',
+  letters:['D','L','M','M','G','V','S'],locale:'it-IT',other:'EN',otherName:'Switch to English'},
+en:{title:'Litter box',settings:'Settings',binTitle:'BIN',trend:'Weight trend',period:'Period',d30:'30 d',d90:'90 d',showValues:'Show values',recent:'Recent visits',
+  cleanNow:'Clean now',cleanSub:'start a cycle',bag:'Bag change',litter:'Litter added',
+  yourCats:'Your cats',yourCatsText:'I recognise them by weight at every visit. The reference weight updates by itself, so I keep recognising them as they gain or lose weight.',
+  closeHint:'Very close weights: recognition may mix them up.',addCat:'+ Add cat',boxTitle:'Litter box',mcuNote:'Litter box offline: these three settings cannot be changed now.',
+  auto:'Automatic cleaning',autoSub:'Empties into the bin after every visit',wait:'Pause before cleaning',waitSub:'Minutes to wait after the cat leaves',
+  odor:'Automatic deodoriser',odorSub:'Runs by itself after every cleaning',binDetails:'Bin and recognition',limit:'Empty the bin after',limitSub:'Visits since the last bag change',visitsUnit:'visits',
+  tol:'Weight tolerance',tolSub:'Largest difference from the cat’s weight',cancel:'Cancel',save:'Save',whoWas:'Who was it?',close:'Close',
+  connecting:'Connecting…',offline:'Litter box offline',fault:'Fault',catInside:'Cat inside',ready:'Ready',booting:'Starting…',unreachable:'Unreachable',
+  faultAlert:c=>'The litter box reports a fault (code '+c+'). Please check it.',fullAlert:'Time to empty the bin.',almostAlert:'The bin is almost full.',
+  welcome:'Who uses the litter box?',welcomeText:'Tell me your cats’ names and weights: I will recognise them at every visit.',welcomeBtn:'Add your cats',
+  visitsToday:n=>n===1?'visit today':'visits today',last:a=>'Last '+a,at:c=>' at '+c,lastNoTime:'Last: time not available',noVisits:'No visits yet',
+  nVisits:n=>plural(n,'visit','visits'),unknown:n=>n===1?'1 visit not recognised':n+' visits not recognised',unknownSub:'Tap it in the list to tell me who it was.',
+  of:n=>'of '+n,binCount:n=>n===1?'visit':'visits',bagChanged:a=>'bag changed '+a,left:n=>plural(n,'visit','visits')+' to go',
+  tapFix:'tap to correct',visitsEmpty:'Your cats’ visits will show up here.',notRecognised:'Not recognised',noData:'no data',showLess:'Show less',showAll:n=>'Show all ('+n+')',
+  justNow:'just now',bagWhen:a=>'last '+a,litterWhen:a=>'last '+a,bagNever:'never recorded',litterNever:'never recorded',devPage:'Developer page',
+  now:'just now',minAgo:n=>n+' min ago',hAgo:n=>n+' h ago',yesterday:'yesterday',daysAgo:n=>n+' days ago',Today:'Today',Yesterday:'Yesterday',noTime:'Time not available',
+  inDays:(d,n)=>' · '+d+' in '+n+' days',noWeight:'no data',trendEmpty:'The chart will appear after the first recognised visits.',today:'today',chart:'Cats’ weight trend in kilograms',day:'Day',
+  visitNoData:'Visit without data',dontKnow:'I don’t know',deleteVisit:'Not a visit: delete',name:'Name',colour:n=>'Colour '+n,remove:'Remove',
+  sending:'Sending the settings to the litter box…',confirmed:'The litter box confirmed the new settings',notConfirmed:'The litter box did not confirm: reopen the settings to check',
+  drum:' The drum may move: make sure no cat is inside.',notReady:' The litter box is not ready, so for now I only record it.',refused:m=>'Recorded, but the litter box refused: '+m,
+  bagDone:'Count reset and litter box notified',bagText:'I reset the bin count and tell the litter box the bag is new.',bagOk:'Bag changed',
+  litterDone:'Recorded: the litter box levels the new litter',litterText:'I record the date and ask the litter box to level the new litter.',litterOk:'Litter added',
+  cleanAsk:'Start cleaning?',cleanText:'The drum will rotate. Make sure no cat is inside or about to enter.',cleanSent:'Cleaning requested',unreachableApi:'Litter box unreachable',
+  dayByDay:'Visits day by day',total:'visits',perDay:'per day',lastDays:n=>'in the last '+n+' days',untimed:n=>plural(n,'visit','visits')+' without a time not included.',
+  keeps:'The history keeps the last 64 visits of all cats.',tapCat:'Tap a cat for its visits day by day',
+  letters:['S','M','T','W','T','F','S'],locale:'en-GB',other:'IT',otherName:'Passa all’italiano'}};
+let LANG=(()=>{try{const l=localStorage.getItem('lang');if(TEXT[l])return l}catch(e){}return /^it\b/i.test(navigator.language||'')?'it':'en'})();
+function t(k,...a){const v=TEXT[LANG][k];return typeof v==='function'?v(...a):v}
+function applyLang(){
+  document.documentElement.lang=LANG;document.title=t('title');
+  document.querySelectorAll('[data-t]').forEach(e=>e.textContent=t(e.dataset.t));
+  document.querySelectorAll('[data-t-aria]').forEach(e=>e.setAttribute('aria-label',t(e.dataset.tAria)));
+  $('lang').textContent=t('other');$('lang').title=$('lang').ariaLabel=t('otherName');
+}
+$('lang').onclick=()=>{LANG=LANG==='it'?'en':'it';try{localStorage.setItem('lang',LANG)}catch(e){}applyLang();if(S)render();else setStatus('',t('connecting'))};
 const darkQuery=matchMedia('(prefers-color-scheme: dark)');
 const PALETTE={light:['#ef8a4a','#8a97ad','#4a4653','#d8ae78','#a56b46','#79a98c'],dark:['#f2955b','#9aa7bd','#a39cb0','#dcb887','#c48a65','#88ba9c']};
 let COLORS=PALETTE[darkQuery.matches?'dark':'light'];
@@ -195,19 +276,20 @@ const CAT='<svg viewBox="0 0 48 48" fill="currentColor"><path d="M7 8c0-1.300 1.
 let S=null,token='',lastKey='',draft=null,busy=false,showAll=false,range=30;
 function h(tag,attrs,...kids){const e=document.createElement(tag);for(const[k,v]of Object.entries(attrs||{})){if(v==null||v===false)continue;if(k==='class')e.className=v;else if(k==='html')e.innerHTML=v;else if(k.startsWith('on'))e[k]=v;else if(k==='style')e.style.cssText=v;else e.setAttribute(k,v)}for(const k of kids.flat())if(k!=null)e.append(k);return e}
 const avatar=(color,cls)=>color==null?h('div',{class:'avatar q '+(cls||'')},'?'):h('div',{class:'avatar '+(cls||''),style:'--c:'+COLORS[color%6],html:CAT});
-const num=(v,d)=>v.toLocaleString('it-IT',{minimumFractionDigits:d,maximumFractionDigits:d});
+const num=(v,d)=>v.toLocaleString(t('locale'),{minimumFractionDigits:d,maximumFractionDigits:d});
 const kg=g=>num(g/1000,1)+' kg';
-const grams=g=>g>=1000?num(g/1000,g%1000?(g%100?2:1):0)+' kg':g+' g';
 const two=n=>String(n).padStart(2,'0');
-const clock=t=>{const d=new Date(t*1000);return two(d.getHours())+':'+two(d.getMinutes())};
+const clock=s=>{const d=new Date(s*1000);return two(d.getHours())+':'+two(d.getMinutes())};
 const dayStart=(off=0)=>{const d=new Date();d.setHours(0,0,0,0);d.setDate(d.getDate()-off);return d.getTime()/1000};
-function ago(t){const s=Date.now()/1000-t;if(s<90)return'adesso';if(s<3600)return Math.round(s/60)+' min fa';if(t>=dayStart())return Math.round(s/3600)+' h fa';if(t>=dayStart(1))return'ieri';return Math.round((dayStart()-t)/86400+.5)+' giorni fa'}
-function dayLabel(t){if(!t)return'Orario non disponibile';if(t>=dayStart())return'Oggi';if(t>=dayStart(1))return'Ieri';return new Date(t*1000).toLocaleDateString('it-IT',{weekday:'long',day:'numeric',month:'long'})}
+// Whole local days between today and the visit (0 = today), correct across DST changes.
+const daysBack=s=>{const d=new Date(s*1000);d.setHours(0,0,0,0);return Math.round((dayStart()*1000-d)/864e5)};
+function ago(s){const x=Date.now()/1000-s;if(x<90)return t('now');if(x<3600)return t('minAgo',Math.round(x/60));if(s>=dayStart())return t('hAgo',Math.round(x/3600));if(s>=dayStart(1))return t('yesterday');return t('daysAgo',daysBack(s))}
+function dayLabel(s){if(!s)return t('noTime');if(s>=dayStart())return t('Today');if(s>=dayStart(1))return t('Yesterday');return new Date(s*1000).toLocaleDateString(t('locale'),{weekday:'long',day:'numeric',month:'long'})}
 const dur=s=>s<60?s+' s':Math.floor(s/60)+' min'+(s%60?' '+s%60+' s':'');
-function toast(t){if(!t)return;const e=$('toast');e.textContent=t;e.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.remove('on'),3200)}
-async function api(path,data,json){const o={method:'POST',headers:{'X-Tonepie-Token':token}};
+function toast(m){if(!m)return;const e=$('toast');e.textContent=m;e.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.remove('on'),3200)}
+async function api(path,data,json){const o={method:'POST',headers:{'X-Tonepie-Token':token,'X-Tonepie-Lang':LANG}};
   if(json){o.headers['Content-Type']='application/json';o.body=JSON.stringify(data)}else o.body=new URLSearchParams(data||{});
-  try{const r=await fetch(path,o);const j=await r.json().catch(()=>({}));return{ok:r.ok,message:j.message||''}}catch(e){return{ok:false,message:'Lettiera non raggiungibile'}}}
+  try{const r=await fetch(path,o);const j=await r.json().catch(()=>({}));return{ok:r.ok,message:j.message||''}}catch(e){return{ok:false,message:t('unreachableApi')}}}
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 // The firmware accepts writes only on fresh data and inside an enabled session, one at a time.
 async function mcuWrites(list){
@@ -223,65 +305,82 @@ document.querySelectorAll('dialog').forEach(d=>{d.addEventListener('click',e=>{i
 
 function setStatus(cls,text){const p=$('status');p.className='pill '+cls;p.lastElementChild.textContent=text}
 function render(){
-  const m=S.mcu,cats=S.config.cats,vis=S.visits;
-  if(!m.online)setStatus('','Lettiera non collegata');else if(m.fault)setStatus('bad','Anomalia');else if(m.presence)setStatus('cat','Gatto dentro');else if(m.ready)setStatus('ok','Pronta');else setStatus('','Avvio…');
-  const pct=S.bin.g/S.config.bin_limit_g,al=$('alerts');al.replaceChildren();
+  const m=S.mcu,cats=S.config.cats,vis=S.visits,limit=S.config.bin_limit_visits;
+  if(!m.online)setStatus('',t('offline'));else if(m.fault)setStatus('bad',t('fault'));else if(m.presence)setStatus('cat',t('catInside'));else if(m.ready)setStatus('ok',t('ready'));else setStatus('',t('booting'));
+  const pct=S.bin.visits/limit,al=$('alerts');al.replaceChildren();
   const warn='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.200" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4m0 4h.01M10.300 3.900 2.500 17.500A2 2 0 0 0 4.200 20.500h15.600a2 2 0 0 0 1.700-3L13.700 3.900a2 2 0 0 0-3.400 0z"/></svg>';
-  if(m.online&&m.fault)al.append(h('div',{class:'alert'},h('span',{html:warn,style:'display:flex'}),'La lettiera segnala un’anomalia (codice '+m.fault+'). Controllala.'));
-  if(pct>=1)al.append(h('div',{class:'alert'},h('span',{html:warn,style:'display:flex'}),'È ora di svuotare il cassetto.'));
-  else if(pct>=.8)al.append(h('div',{class:'alert warn'},h('span',{html:warn,style:'display:flex'}),'Il cassetto è quasi pieno.'));
+  if(m.online&&m.fault)al.append(h('div',{class:'alert'},h('span',{html:warn,style:'display:flex'}),t('faultAlert',m.fault)));
+  if(pct>=1)al.append(h('div',{class:'alert'},h('span',{html:warn,style:'display:flex'}),t('fullAlert')));
+  else if(pct>=.8)al.append(h('div',{class:'alert warn'},h('span',{html:warn,style:'display:flex'}),t('almostAlert')));
   // cats
   const box=$('cats');box.replaceChildren();
-  if(!cats.length){box.append(h('div',{class:'card welcome'},h('div',{class:'avatar',html:CAT}),h('h2',{},'Chi usa la lettiera?'),h('p',{},'Dimmi nome e peso dei tuoi gatti: li riconoscerò a ogni visita.'),h('button',{class:'btn primary',onclick:openSettings},'Aggiungi i gatti')))}
-  const t0=dayStart();let maxDay=1;const days=cats.map((c,i)=>{const a=Array(7).fill(0);for(const v of vis)if(v.cat===i&&v.t){const k=Math.floor((t0+86400-v.t)/86400);if(k>=0&&k<7)a[6-k]++}maxDay=Math.max(maxDay,...a);return a});
-  const letters=['D','L','M','M','G','V','S'],wd=new Date().getDay();
+  if(!cats.length){box.append(h('div',{class:'card welcome'},h('div',{class:'avatar',html:CAT}),h('h2',{},t('welcome')),h('p',{},t('welcomeText')),h('button',{class:'btn primary',onclick:openSettings},t('welcomeBtn'))))}
+  const t0=dayStart();let maxDay=1;const days=cats.map((c,i)=>{const a=Array(7).fill(0);for(const v of vis)if(v.cat===i&&v.t){const k=daysBack(v.t);if(k>=0&&k<7)a[6-k]++}maxDay=Math.max(maxDay,...a);return a});
+  const letters=t('letters'),wd=new Date().getDay();
   cats.forEach((c,i)=>{const mine=vis.filter(v=>v.cat===i),last=mine[0],lw=mine.find(v=>v.g);
-    box.append(h('article',{class:'card cat',style:'--c:'+COLORS[c.color%6]},
+    box.append(h('article',{class:'card cat',style:'--c:'+COLORS[c.color%6],role:'button',tabindex:0,title:t('tapCat'),onclick:()=>openCat(i),onkeydown:e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openCat(i)}}},
       h('div',{class:'cat-top'},avatar(c.color),h('div',{},h('h2',{},c.name),h('p',{class:'muted small'},lw?kg(lw.g):kg(c.weight_g)))),
-      h('div',{class:'big'},h('strong',{},String(days[i][6])),h('span',{},days[i][6]===1?'visita oggi':'visite oggi')),
-      h('p',{class:'last'},last?(last.t?'Ultima '+ago(last.t)+(last.t<t0&&last.t>=dayStart(1)?' alle '+clock(last.t):''):'Ultima: orario non disponibile'):'Nessuna visita ancora'),
-      h('div',{class:'bars'},days[i].map((n,k)=>h('div',{class:'bar'+(k===6?' today':''),title:n+' visite'},h('i',{style:'height:'+Math.round(n/maxDay*100)+'%'}),letters[(wd+1+k)%7])))))});
+      h('div',{class:'big'},h('strong',{},String(days[i][6])),h('span',{},t('visitsToday',days[i][6]))),
+      h('p',{class:'last'},last?(last.t?t('last',ago(last.t))+(last.t<t0&&last.t>=dayStart(1)?t('at',clock(last.t)):''):t('lastNoTime')):t('noVisits')),
+      h('div',{class:'bars'},days[i].map((n,k)=>h('div',{class:'bar'+(k===6?' today':''),title:t('nVisits',n)},h('i',{style:'height:'+Math.round(n/maxDay*100)+'%'}),letters[(wd+1+k)%7])))))});
   const unk=vis.filter(v=>v.cat<0&&(!v.t||v.t>=t0)).length;
-  if(cats.length&&unk)box.append(h('div',{class:'card wide'},avatar(null,'sm'),h('div',{},h('b',{},unk===1?'1 visita non riconosciuta':unk+' visite non riconosciute'),h('p',{class:'muted small'},'Toccala nell’elenco per dirmi chi era.'))));
-  // bin
+  if(cats.length&&unk)box.append(h('div',{class:'card wide'},avatar(null,'sm'),h('div',{},h('b',{},t('unknown',unk)),h('p',{class:'muted small'},t('unknownSub')))));
+  // bin: visits since the last bag change
   $('bin').hidden=false;const lvl=pct>=1?'var(--bad)':pct>=.8?'var(--warn)':'var(--ok)';
   $('ringFill').style.stroke=lvl;$('ringFill').style.strokeDashoffset=314.16*(1-Math.min(pct,1));
-  $('ringPct').textContent=Math.round(pct*100)+'%';$('binG').textContent=grams(S.bin.g);$('binOf').textContent='di '+grams(S.config.bin_limit_g);
-  const left=Math.max(0,Math.ceil((S.config.bin_limit_g-S.bin.g)/S.config.grams_per_visit));
-  $('binSub').textContent=[S.bin.visits+(S.bin.visits===1?' visita finora':' visite finora'),S.bin.since?'sacchetto cambiato '+ago(S.bin.since):null,pct<1?'ancora circa '+left+(left===1?' visita':' visite'):null].filter(Boolean).join(' · ');
+  $('ringPct').textContent=Math.round(pct*100)+'%';$('binN').textContent=S.bin.visits+' '+t('binCount',S.bin.visits);$('binOf').textContent=t('of',limit);
+  $('binSub').textContent=[S.bin.since?t('bagChanged',ago(S.bin.since)):null,pct<1?t('left',limit-S.bin.visits):null].filter(Boolean).join(' · ');
   // visits
-  $('visitsCard').hidden=false;const list=$('visits');list.replaceChildren();$('visitsHint').textContent=vis.length?'tocca per correggere':'';
-  if(!vis.length)list.append(h('p',{class:'empty'},'Qui compariranno le visite dei tuoi gatti.'));
+  $('visitsCard').hidden=false;const list=$('visits');list.replaceChildren();$('visitsHint').textContent=vis.length?t('tapFix'):'';
+  if(!vis.length)list.append(h('p',{class:'empty'},t('visitsEmpty')));
   let day='';for(const v of vis.slice(0,showAll?64:10)){const d=dayLabel(v.t);if(d!==day){day=d;list.append(h('p',{class:'day'},d))}
     const c=v.cat>=0?cats[v.cat]:null;
     list.append(h('button',{class:'visit',onclick:()=>openVisit(v)},avatar(c?c.color:null,'sm'),
-      h('div',{class:'who'},h('b',{},c?c.name:'Non riconosciuto'),h('span',{},[v.g?kg(v.g):null,v.s?dur(v.s):null].filter(Boolean).join(' · ')||'nessun dato')),
+      h('div',{class:'who'},h('b',{},c?c.name:t('notRecognised')),h('span',{},[v.g?kg(v.g):null,v.s?dur(v.s):null].filter(Boolean).join(' · ')||t('noData'))),
       v.t?h('time',{},clock(v.t)):null))}
-  if(vis.length>10)list.append(h('button',{class:'btn ghost block',style:'padding:10px',onclick:()=>{showAll=!showAll;render()}},showAll?'Mostra meno':'Mostra tutte ('+vis.length+')'));
+  if(vis.length>10)list.append(h('button',{class:'btn ghost block',style:'padding:10px',onclick:()=>{showAll=!showAll;render()}},showAll?t('showLess'):t('showAll',vis.length)));
   $('cleanWrap').hidden=false;$('bag').disabled=$('litter').disabled=busy;
-  const when=(t,word,never)=>!t?never:ago(t)==='adesso'?'proprio adesso':word+' '+ago(t);
-  $('bagSub').textContent=when(S.bin.since,'ultimo','mai registrato');$('litterSub').textContent=when(S.litter_at,'ultima','mai registrata');
+  const when=(s,key,never)=>!s?t(never):ago(s)===t('now')?t('justNow'):t(key,ago(s));
+  $('bagSub').textContent=when(S.bin.since,'bagWhen','bagNever');$('litterSub').textContent=when(S.litter_at,'litterWhen','litterNever');
   $('clean').disabled=busy||!m.ready||!!m.presence||!!m.fault||!!m.lock||m.pending;
-  $('foot').replaceChildren('Firmware '+S.firmware+' · ',h('a',{href:'/dev'},'Pagina sviluppatore'));drawTrend();
+  $('foot').replaceChildren('Firmware '+S.firmware+' · ',h('a',{href:'/dev'},t('devPage')));drawTrend();
+  if($('dlgCat').open)openCat(openCat.i);
 }
-const dayText=d=>new Date(d*864e5).toLocaleDateString('it-IT',{day:'numeric',month:'short'});
-const signed=v=>(v>0?'+':v<0?'\u2212':'')+num(Math.abs(v),1)+' kg';
+// Visits of one cat per local day, from today back to the oldest visit kept (at least a week).
+function openCat(i){
+  const c=S.config.cats[i];if(!c){$('dlgCat').close();return}openCat.i=i;
+  const mine=S.visits.filter(v=>v.cat===i),timed=mine.filter(v=>v.t),oldest=S.visits.reduce((a,v)=>v.t&&v.t<a?v.t:a,Date.now()/1000);
+  const span=Math.min(60,Math.max(7,daysBack(oldest)+1)),counts=Array(span).fill(0);
+  for(const v of timed){const k=daysBack(v.t);if(k>=0&&k<span)counts[k]++}
+  const total=counts.reduce((a,b)=>a+b,0),most=Math.max(1,...counts);
+  $('dlgCat').style.setProperty('--c',COLORS[c.color%6]);
+  $('catHead').replaceChildren(avatar(c.color),h('div',{},h('h2',{},c.name),h('p',{class:'muted'},t('dayByDay'))));
+  $('catStats').replaceChildren(h('div',{},h('b',{},String(total)),h('span',{},t('total')+' '+t('lastDays',span))),
+    h('div',{},h('b',{},num(total/span,1)),h('span',{},t('perDay'))));
+  $('catDays').replaceChildren(...counts.map((n,k)=>{const s=dayStart(k);
+    const label=k===0?t('Today'):k===1?t('Yesterday'):new Date(s*1000).toLocaleDateString(t('locale'),{weekday:'short',day:'numeric',month:'short'});
+    return h('div',{class:'drow'+(n?'':' zero')},h('span',{},label),h('div',{},h('i',{style:'width:'+(n/most*100)+'%'})),h('b',{},String(n)))}));
+  const untimed=mine.length-timed.length;$('catNote').textContent=(untimed?t('untimed',untimed)+' ':'')+t('keeps');
+  if(!$('dlgCat').open)$('dlgCat').showModal();
+}
+const dayText=d=>new Date(d*864e5).toLocaleDateString(t('locale'),{day:'numeric',month:'short'});
+const signed=v=>(v>0?'+':v<0?'−':'')+num(Math.abs(v),1)+' kg';
 function drawTrend(){
   const cats=S.config.cats,card=$('trend');card.hidden=!cats.length;if(!cats.length)return;
   const today=Math.floor(Date.now()/864e5),from=today-range+1;
   const series=cats.map(c=>({name:c.name,color:COLORS[c.color%6],pts:(c.days||[]).map((d,k)=>[d,c.grams[k]/1000]).filter(p=>p[0]>=from&&p[0]<=today)}));
   $('legend').replaceChildren(...series.map(s=>{const a=s.pts[0],b=s.pts[s.pts.length-1];
-    return h('div',{style:'--c:'+s.color},h('i'),s.name,h('span',{},b?num(b[1],1)+' kg'+(s.pts.length>1?' · '+signed(b[1]-a[1])+' in '+(b[0]-a[0])+' giorni':''):'nessun dato'))}));
+    return h('div',{style:'--c:'+s.color},h('i'),s.name,h('span',{},b?num(b[1],1)+' kg'+(s.pts.length>1?t('inDays',signed(b[1]-a[1]),b[0]-a[0]):''):t('noWeight')))}));
   const plot=$('plot'),all=series.flatMap(s=>s.pts.map(p=>p[1]));
   $('trendTable').hidden=!all.length;
-  if(!all.length){plot.onpointermove=null;plot.replaceChildren(h('p',{class:'empty'},'Il grafico comparirà dopo le prime visite riconosciute.'));return}
+  if(!all.length){plot.onpointermove=null;plot.replaceChildren(h('p',{class:'empty'},t('trendEmpty')));return}
   const W=plot.clientWidth||320,H=190,L=30,R=40,T=10,B=24;
   let lo=Math.min(...all)-.15,hi=Math.max(...all)+.15;const step=hi-lo<=1?.2:hi-lo<=2.5?.5:1;
   lo=Math.floor(lo/step+1e-9)*step;hi=Math.ceil(hi/step-1e-9)*step;
   const x=d=>L+(d-from)/(range-1)*(W-L-R),y=v=>T+(hi-v)/(hi-lo)*(H-T-B),f=n=>n.toFixed(1);
   let g='';
   for(let v=lo;v<=hi+1e-9;v+=step)g+=`<line class="grid" x1="${L}" x2="${W-R}" y1="${f(y(v))}" y2="${f(y(v))}"/><text x="${L-6}" y="${f(y(v)+4)}" text-anchor="end">${num(v,1)}</text>`;
-  [[from,'start'],[from+Math.floor(range/2),'middle'],[today,'end']].forEach(([d,a])=>g+=`<text x="${f(x(d))}" y="${H-5}" text-anchor="${a}">${d===today?'oggi':dayText(d)}</text>`);
+  [[from,'start'],[from+Math.floor(range/2),'middle'],[today,'end']].forEach(([d,a])=>g+=`<text x="${f(x(d))}" y="${H-5}" text-anchor="${a}">${d===today?t('today'):dayText(d)}</text>`);
   g+=`<line class="cross" id="cross" y1="${T}" y2="${H-B}" visibility="hidden"/>`;
   // End labels carry the latest value; nudged apart when two lines finish close together.
   const ends=series.filter(s=>s.pts.length).map(s=>({s,y:y(s.pts[s.pts.length-1][1])})).sort((a,b)=>a.y-b.y);
@@ -291,16 +390,16 @@ function drawTrend(){
     const dots=s.pts.length<=14?s.pts:[s.pts[s.pts.length-1]];
     for(const p of dots)g+=`<circle cx="${f(x(p[0]))}" cy="${f(y(p[1]))}" r="4" fill="${s.color}"/>`}
   for(const e of ends){const p=e.s.pts[e.s.pts.length-1];g+=`<text class="end" x="${f(x(p[0])+9)}" y="${f(e.y+4)}">${num(p[1],1)}</text>`}
-  plot.innerHTML=`<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Andamento del peso dei gatti in chilogrammi">${g}</svg>`;
+  plot.innerHTML=`<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${t('chart')}">${g}</svg>`;
   const tip=h('div',{class:'tip',hidden:''});plot.append(tip);const cross=plot.querySelector('#cross');
   const daysWithData=[...new Set(series.flatMap(s=>s.pts.map(p=>p[0])))].sort((a,b)=>a-b);
   plot.onpointermove=e=>{const px=e.clientX-plot.getBoundingClientRect().left,want=from+(px-L)/(W-L-R)*(range-1);
     const d=daysWithData.reduce((a,b)=>Math.abs(b-want)<Math.abs(a-want)?b:a);
     cross.setAttribute('x1',f(x(d)));cross.setAttribute('x2',f(x(d)));cross.setAttribute('visibility','visible');
-    tip.replaceChildren(h('b',{},d===today?'Oggi':dayText(d)),...series.map(s=>{const p=s.pts.find(p=>p[0]===d);return p?h('div',{style:'--c:'+s.color},h('i'),s.name+' '+num(p[1],1)+' kg'):null}).filter(Boolean));
+    tip.replaceChildren(h('b',{},d===today?t('Today'):dayText(d)),...series.map(s=>{const p=s.pts.find(p=>p[0]===d);return p?h('div',{style:'--c:'+s.color},h('i'),s.name+' '+num(p[1],1)+' kg'):null}).filter(Boolean));
     tip.hidden=false;const tw=tip.offsetWidth;tip.style.left=Math.max(0,Math.min(W-tw,x(d)+(x(d)>W/2?-tw-10:10)))+'px'};
   plot.onpointerleave=()=>{tip.hidden=true;cross.setAttribute('visibility','hidden')};
-  $('trendRows').replaceChildren(h('table',{},h('tr',{},h('th',{},'Giorno'),series.map(s=>h('th',{},s.name))),
+  $('trendRows').replaceChildren(h('table',{},h('tr',{},h('th',{},t('day')),series.map(s=>h('th',{},s.name))),
     daysWithData.slice().reverse().map(d=>h('tr',{},h('td',{},dayText(d)),series.map(s=>{const p=s.pts.find(p=>p[0]===d);return h('td',{},p?num(p[1],1)+' kg':'—')})))));
 }
 document.querySelectorAll('[data-range]').forEach(b=>b.onclick=()=>{range=+b.dataset.range;document.querySelectorAll('[data-range]').forEach(o=>o.setAttribute('aria-pressed',String(o===b)));drawTrend()});
@@ -308,14 +407,14 @@ addEventListener('resize',()=>{if(S)drawTrend()});
 async function refresh(){
   try{const r=await fetch('/api/home',{cache:'no-store'});if(!r.ok)throw 0;const s=await r.json();token=s.token;S=s;
     const key=JSON.stringify([s.mcu,s.config,s.bin,s.visits,Math.floor(Date.now()/60000)]);if(key!==lastKey){lastKey=key;render()}}
-  catch(e){lastKey='';setStatus('','Non raggiungibile');$('clean').disabled=true}
+  catch(e){lastKey='';setStatus('',t('unreachable'));$('clean').disabled=true}
 }
 function openVisit(v){
-  const cats=S.config.cats;$('visitInfo').textContent=[v.t?dayLabel(v.t)+' alle '+clock(v.t):null,v.g?kg(v.g):null,v.s?dur(v.s):null].filter(Boolean).join(' · ')||'Visita senza dati';
+  const cats=S.config.cats;$('visitInfo').textContent=[v.t?dayLabel(v.t)+t('at',clock(v.t)):null,v.g?kg(v.g):null,v.s?dur(v.s):null].filter(Boolean).join(' · ')||t('visitNoData');
   const set=async cat=>{$('dlgVisit').close();const r=await api('/api/visit',{id:v.id,cat});toast(r.message);refresh()};
   $('visitChoices').replaceChildren(...cats.map((c,i)=>h('button',{class:'choice',onclick:()=>set(i)},avatar(c.color,'sm'),c.name)),
-    h('button',{class:'choice',onclick:()=>set(-1)},avatar(null,'sm'),'Non lo so'),
-    h('button',{class:'btn danger',onclick:()=>set('delete')},'Non era una visita: elimina'));
+    h('button',{class:'choice',onclick:()=>set(-1)},avatar(null,'sm'),t('dontKnow')),
+    h('button',{class:'btn danger',onclick:()=>set('delete')},t('deleteVisit')));
   $('dlgVisit').showModal();
 }
 function drawEditors(){
@@ -323,17 +422,17 @@ function drawEditors(){
   draft.cats.forEach((c,i)=>{
     box.append(h('div',{class:'cat-edit'},
       h('div',{class:'row'},avatar(c.color,'sm'),
-        h('div',{class:'field grow'},h('input',{value:c.name,placeholder:'Nome',maxlength:16,required:'',oninput:e=>c.name=e.target.value})),
-        h('div',{class:'field kg'},h('input',{type:'number',value:c.kg,min:.5,max:20,step:.1,required:'',inputmode:'decimal',placeholder:'4,0',oninput:e=>{c.kg=e.target.value;hint()}}),h('span',{},'kg'))),
-      h('div',{class:'swatches'},COLORS.map((col,k)=>h('button',{type:'button',class:'swatch',style:'--c:'+col,'aria-pressed':String(c.color===k),'aria-label':'Colore '+(k+1),onclick:()=>{c.color=k;drawEditors()}})),
-        h('button',{type:'button',class:'btn danger',onclick:()=>{draft.cats.splice(i,1);drawEditors()}},'Rimuovi'))))});
+        h('div',{class:'field grow'},h('input',{value:c.name,placeholder:t('name'),maxlength:16,required:'',oninput:e=>c.name=e.target.value})),
+        h('div',{class:'field kg'},h('input',{type:'number',value:c.kg,min:.5,max:20,step:.1,required:'',inputmode:'decimal',placeholder:'4.0',oninput:e=>{c.kg=e.target.value;hint()}}),h('span',{},'kg'))),
+      h('div',{class:'swatches'},COLORS.map((col,k)=>h('button',{type:'button',class:'swatch',style:'--c:'+col,'aria-pressed':String(c.color===k),'aria-label':t('colour',k+1),onclick:()=>{c.color=k;drawEditors()}})),
+        h('button',{type:'button',class:'btn danger',onclick:()=>{draft.cats.splice(i,1);drawEditors()}},t('remove')))))});
   $('addCat').hidden=draft.cats.length>=4;hint();
 }
 function hint(){const w=draft.cats.map(c=>parseFloat(c.kg)).filter(x=>x>0);let close=false;for(let i=0;i<w.length;i++)for(let j=i+1;j<w.length;j++)if(Math.abs(w[i]-w[j])<.3)close=true;$('closeHint').hidden=!close}
 function openSettings(){
   if(!S)return;const c=S.config;draft={cats:c.cats.map((x,i)=>({name:x.name,kg:(x.weight_g/1000).toFixed(1),shown:(x.weight_g/1000).toFixed(1),grams:x.weight_g,color:x.color,from:i}))};
   if(!draft.cats.length)draft.cats.push({name:'',kg:'',color:0},{name:'',kg:'',color:1});
-  $('optLimit').value=c.bin_limit_g;$('optGrams').value=c.grams_per_visit;$('optTol').value=(c.tolerance_g/1000).toFixed(1);
+  $('optLimit').value=c.bin_limit_visits;$('optTol').value=(c.tolerance_g/1000).toFixed(1);
   const m=S.mcu,on=!!m.ready;$('mcuNote').hidden=on;
   $('mAuto').checked=!!m.auto;$('mAuto').disabled=!on||m.auto==null;
   $('mWait').value=m.wait_min??'';$('mWait').disabled=!on||m.wait_min==null;
@@ -344,7 +443,7 @@ $('gear').onclick=openSettings;
 $('addCat').onclick=()=>{draft.cats.push({name:'',kg:'',color:draft.cats.length%6});drawEditors()};
 $('formSettings').onsubmit=async e=>{e.preventDefault();
   const r=await api('/api/config',{cats:draft.cats.map(c=>({name:c.name.trim(),weight_g:c.kg===c.shown?c.grams:Math.round(parseFloat(c.kg)*1000),color:c.color,from:c.from??-1})),
-    bin_limit_g:+$('optLimit').value,grams_per_visit:+$('optGrams').value,tolerance_g:Math.round(parseFloat($('optTol').value)*1000)},true);
+    bin_limit_visits:+$('optLimit').value,tolerance_g:Math.round(parseFloat($('optTol').value)*1000)},true);
   toast(r.message);if(!r.ok)return;
   // Settings kept by the litter box itself: send only what changed.
   const m=S.mcu,w=[],auto=$('mAuto'),wait=$('mWait'),odor=$('mOdor');
@@ -352,26 +451,27 @@ $('formSettings').onsubmit=async e=>{e.preventDefault();
   if(!wait.disabled&&wait.value!==''&&+wait.value!==m.wait_min)w.push({path:'/api/value',data:{dp:117,value:+wait.value}});
   if(!odor.disabled&&odor.checked!==!!m.odor)w.push({path:'/api/command',data:{action:odor.checked?'odor_on':'odor_off'}});
   $('dlgSettings').close();
-  if(w.length){toast('Invio le impostazioni alla lettiera…');const sent=await mcuWrites(w);await sleep(1500);await refresh();
+  if(w.length){toast(t('sending'));const sent=await mcuWrites(w);await sleep(1500);await refresh();
     const s=S.mcu,kept=(auto.disabled||auto.checked===!!s.auto)&&(wait.disabled||wait.value===''||+wait.value===s.wait_min)&&(odor.disabled||odor.checked===!!s.odor);
-    toast(!sent.ok?sent.message:kept?'La lettiera ha confermato le nuove impostazioni':'La lettiera non ha confermato: riapri le impostazioni per controllare')}
+    toast(!sent.ok?sent.message:kept?t('confirmed'):t('notConfirmed'))}
   else refresh()};
 // Both are recorded here even with the litter box offline; the MCU is told only when it is ready.
 async function maintenance(path,action,done,title,text,ok){
   const on=S.mcu.ready&&!S.mcu.presence&&!S.mcu.fault&&!S.mcu.lock;
-  if(!await confirmBox(title,text+(on?' Il tamburo potrebbe muoversi: controlla che nessun gatto sia dentro.':' La lettiera non è pronta, quindi per ora lo registro soltanto.'),ok))return;
+  if(!await confirmBox(title,text+(on?t('drum'):t('notReady')),ok))return;
   busy=true;$('bag').disabled=$('litter').disabled=$('clean').disabled=true;
   const r=await api(path);
-  if(r.ok&&on){const w=await mcuWrites([{path:'/api/command',data:{action}}]);toast(w.ok?done:'Registrato, ma la lettiera ha rifiutato: '+w.message)}else toast(r.message);
+  if(r.ok&&on){const w=await mcuWrites([{path:'/api/command',data:{action}}]);toast(w.ok?done:t('refused',w.message))}else toast(r.message);
   busy=false;lastKey='';refresh();
 }
-$('bag').onclick=()=>maintenance('/api/bin/reset','bag','Stima azzerata e lettiera avvisata','Cambio sacchetto','Azzero la stima del cassetto e avviso la lettiera che il sacchetto è nuovo.','Sacchetto cambiato');
-$('litter').onclick=()=>maintenance('/api/litter','level','Registrato: la lettiera livella la sabbia','Aggiunta lettiera','Registro la data e chiedo alla lettiera di livellare la sabbia nuova.','Lettiera aggiunta');
+$('bag').onclick=()=>maintenance('/api/bin/reset','bag',t('bagDone'),t('bag'),t('bagText'),t('bagOk'));
+$('litter').onclick=()=>maintenance('/api/litter','level',t('litterDone'),t('litter'),t('litterText'),t('litterOk'));
 $('clean').onclick=async()=>{
-  if(!await confirmBox('Avvio la pulizia?','Il tamburo ruoterà. Controlla che nessun gatto sia dentro o stia entrando.','Pulisci ora'))return;
+  if(!await confirmBox(t('cleanAsk'),t('cleanText'),t('cleanNow')))return;
   busy=true;$('clean').disabled=true;
-  const r=await mcuWrites([{path:'/api/command',data:{action:'clean'}}]);toast(r.ok?'Pulizia richiesta alla lettiera':r.message);
+  const r=await mcuWrites([{path:'/api/command',data:{action:'clean'}}]);toast(r.ok?t('cleanSent'):r.message);
   busy=false;lastKey='';refresh();
 };
+applyLang();setStatus('',t('connecting'));
 refresh();setInterval(refresh,5000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh()});
 </script></body></html>)HTML";

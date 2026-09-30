@@ -3,8 +3,9 @@
     python tools/preview.py [port]
 
 Serves the home page (/) and the developer page (/dev) extracted from the C++
-headers, without an ESP or a litter box. The fake API answers in Italian like
-the firmware does. Scenarios: /mock/demo, /mock/empty, /mock/full.
+headers, without an ESP or a litter box. Like the firmware, the fake API answers
+in English when the page sends "X-Tonepie-Lang: en". Scenarios: /mock/demo,
+/mock/empty, /mock/full.
 """
 import json
 import random
@@ -23,12 +24,31 @@ def page(header):
     return re.search(r'R"HTML\((.*)\)HTML"', text, re.S).group(1).encode("utf-8")
 
 
+def icons():
+    """PNG icons from include/icons.h and the manifest from src/main.cpp."""
+    text = (ROOT / "include" / "icons.h").read_text(encoding="utf-8")
+    out = {}
+    for size, body in re.findall(r"ICON_(\d+)\[\] PROGMEM = \{(.*?)\};", text, re.S):
+        out[size] = bytes(int(b, 16) for b in re.findall(r"0x([0-9a-f]{2})", body))
+    main = (ROOT / "src" / "main.cpp").read_text(encoding="utf-8")
+    manifest = re.search(r'MANIFEST\[\] PROGMEM = R"J\((.*?)\)J"', main, re.S).group(1).encode("utf-8")
+    return out, manifest
+
+
+ICONS, MANIFEST = icons()
+EN = {"Impostazioni salvate": "Settings saved", "Aggiunta di lettiera registrata": "Litter top-up recorded",
+      "Cassetto svuotato: conteggio azzerato": "Bin emptied: count reset", "Visita non trovata": "Visit not found",
+      "Visita eliminata": "Visit deleted", "Visita aggiornata": "Visit updated", "Risorsa non trovata": "Not found",
+      "Anteprima: impostazione finta aggiornata": "Preview: fake setting updated",
+      "Anteprima: nessun comando inviato": "Preview: no command sent"}
+
+
 def demo():
     random.seed(7)
     now = int(time.time())
     cats = [{"name": "Micio", "weight_g": 4200, "color": 0}, {"name": "Luna", "weight_g": 5600, "color": 1}]
     visits, t, vid = [], now - 40 * 60, 200
-    while t > now - 7 * 86400:
+    while t > now - 12 * 86400:
         cat = random.choice([0, 0, 1, 1, 1, -1] if len(visits) == 3 else [0, 1])
         grams = 0 if cat < 0 else cats[cat]["weight_g"] + random.choice([-100, 0, 0, 100])
         visits.append({"id": vid, "t": t, "g": grams, "s": random.randint(35, 160), "cat": cat, "manual": False})
@@ -40,15 +60,15 @@ def demo():
         cat["days"] = days
         cat["grams"] = [round((cat["weight_g"] + drift * (d - today) + random.gauss(0, 45)) / 10) * 10 for d in days]
     return {
-        "config": {"tolerance_g": 500, "grams_per_visit": 50, "bin_limit_g": 1500, "cats": cats},
-        "bin": {"g": 850, "since": now - 3 * 86400 - 5000, "visits": 17},
+        "config": {"tolerance_g": 500, "bin_limit_visits": 30, "cats": cats},
+        "bin": {"since": now - 3 * 86400 - 5000, "visits": 17},
         "visits": visits,
     }
 
 
 def empty():
-    return {"config": {"tolerance_g": 500, "grams_per_visit": 50, "bin_limit_g": 1500, "cats": []},
-            "bin": {"g": 0, "since": 0, "visits": 0}, "visits": []}
+    return {"config": {"tolerance_g": 500, "bin_limit_visits": 30, "cats": []},
+            "bin": {"since": 0, "visits": 0}, "visits": []}
 
 
 STATE = demo()
@@ -59,6 +79,8 @@ MCU = {"online": True, "ready": True, "pending": False, "presence": False, "faul
 
 class Handler(BaseHTTPRequestHandler):
     def send(self, code, body, kind="application/json"):
+        if isinstance(body, dict) and "message" in body and self.headers.get("X-Tonepie-Lang") == "en":
+            body = dict(body, message=EN.get(body["message"], body["message"]))
         if not isinstance(body, bytes):
             body = json.dumps(body).encode("utf-8")
         self.send_response(code)
@@ -75,6 +97,10 @@ class Handler(BaseHTTPRequestHandler):
             self.send(200, page("web_home.h"), "text/html; charset=utf-8")
         elif path == "/dev":
             self.send(200, page("web_ui.h"), "text/html; charset=utf-8")
+        elif path in ("/apple-touch-icon.png", "/icon-192.png", "/icon-512.png"):
+            self.send(200, ICONS["180" if "apple" in path else path[6:9]], "image/png")
+        elif path == "/manifest.webmanifest":
+            self.send(200, MANIFEST, "application/manifest+json")
         elif path == "/api/home":
             self.send(200, dict(STATE, litter_at=LITTER_AT, firmware="anteprima", token="mock", now=int(time.time()),
                                 mcu=MCU))
@@ -86,7 +112,7 @@ class Handler(BaseHTTPRequestHandler):
         elif path.startswith("/mock/"):
             STATE = {"demo": demo, "empty": empty}.get(path[6:], demo)()
             if path[6:] == "full":
-                STATE["bin"].update(g=1580, visits=31)
+                STATE["bin"].update(visits=31)
             self.send(200, {"message": "scenario " + path[6:]})
         else:
             self.send(404, {"message": "Risorsa non trovata"})
@@ -102,14 +128,14 @@ class Handler(BaseHTTPRequestHandler):
                 source = old[index] if 0 <= index < len(old) else {}
                 cat.update(days=source.get("days", []), grams=source.get("grams", []))
             STATE["config"] = {"cats": data["cats"], "tolerance_g": data["tolerance_g"],
-                               "grams_per_visit": data["grams_per_visit"], "bin_limit_g": data["bin_limit_g"]}
+                               "bin_limit_visits": data["bin_limit_visits"]}
             self.send(200, {"message": "Impostazioni salvate"})
         elif path == "/api/litter":
             global LITTER_AT
             LITTER_AT = int(time.time())
             self.send(200, {"message": "Aggiunta di lettiera registrata"})
         elif path == "/api/bin/reset":
-            STATE["bin"] = {"g": 0, "since": int(time.time()), "visits": 0}
+            STATE["bin"] = {"since": int(time.time()), "visits": 0}
             self.send(200, {"message": "Cassetto svuotato: conteggio azzerato"})
         elif path == "/api/visit":
             form = {k: v[0] for k, v in parse_qs(raw).items()}
