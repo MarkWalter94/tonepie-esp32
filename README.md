@@ -1,6 +1,6 @@
 # Tonepie Ti Pro 25 — local ESP32-C3 firmware
 
-Replace the Tuya Wi-Fi module (WBR3) of a **Tonepie Ti Pro 25 / TPCBP-T2501** self-cleaning litter box with an **Ai-Thinker ESP-C3-13-Kit**, and run it completely locally: no Tuya cloud, no app, no account. The original MCU keeps driving motors, sensors and safety logic; the ESP32-C3 only speaks the Tuya MCU serial protocol to it and serves a web interface on your LAN.
+Replace the Tuya Wi-Fi module (WBR3) of a **Tonepie Ti Pro 25 / TPCBP-T2501** self-cleaning litter box with an ESP32 (here an **Ai-Thinker ESP-C3-13-Kit**; any ESP32 or ESP8266 module fits electrically, see [Other boards](#other-boards)), and run it completely locally: no Tuya cloud, no app, no account. The original MCU keeps driving motors, sensors and safety logic; the ESP32-C3 only speaks the Tuya MCU serial protocol to it and serves a web interface on your LAN.
 
 | | |
 |---|---|
@@ -17,7 +17,7 @@ The web pages are in Italian (they were written for one household). All code, co
 
 ### Parts
 
-- Ai-Thinker **ESP-C3-13-Kit** (also sold as NodeMCU ESP-C3-13/13U-Kit). It has a CH340 USB-serial converter on board, used for the first flash and for logs.
+- Ai-Thinker **ESP-C3-13-Kit** (also sold as NodeMCU ESP-C3-13/13U-Kit). It has a CH340 USB-serial converter on board, used for the first flash and for logs. This is the board used here; see [Other boards](#other-boards) for alternatives.
 - Four thin wires, a soldering iron, some hot glue or tape, optionally a small perfboard as an adapter.
 - A multimeter for continuity checks.
 
@@ -68,6 +68,20 @@ A small perfboard makes a convenient adapter between the four wires and the kit'
 ### Step 5 — first flash over USB, then everything over the air
 
 See [Building and flashing](#building-and-flashing). After the first flash, updates go over Wi-Fi.
+
+### Other boards
+
+Electrically the modification is the same for any ESP module: the litter box needs four wires — 3.3 V, GND and a 3.3 V UART pair — and nothing else. Any **ESP32** family board (ESP32, ESP32-S2/S3, ESP32-C3/C6) or **ESP8266** board can take the place of the WBR3; use a board with a USB-serial converter unless you are comfortable flashing with an external adapter.
+
+What changes is the firmware side:
+
+| Board | Firmware status |
+|---|---|
+| ESP-C3-13-Kit (ESP32-C3) | the tested target, `platformio.ini` env `tonepie-c3` |
+| other ESP32 family boards | should build with a new `[env:...]` (board id, and `MCU_RX`/`MCU_TX` in `include/config.h` set to two free pins). Not tested; use a spare UART, keep the pins wired to the USB converter for flashing and logs, and avoid strapping pins |
+| ESP8266 (NodeMCU, Wemos D1 mini, …) | **needs a port**: the code uses ESP32-only libraries (`Preferences`, `Update`, `ESPmDNS`, `HardwareSerial(1)`, hardware random). The ESP8266 also has a single full UART, so the MCU would take `Serial` and USB logging would be lost. Not done yet |
+
+The MCU protocol, the pages and the logic are board-independent; only `src/main.cpp` and `platformio.ini` touch the hardware.
 
 ## Building and flashing
 
