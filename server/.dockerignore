@@ -1,0 +1,6 @@
+**/bin/
+**/obj/
+data/
+.env
+Tonepie.Server.Tests/
+*.db

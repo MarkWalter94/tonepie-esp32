@@ -155,6 +155,14 @@ details{margin-top:14px}summary{cursor:pointer;font-weight:700;color:var(--muted
 .drow:last-child{border:0}.drow span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.drow.zero{color:var(--muted)}
 .drow i{display:block;height:10px;border-radius:5px;background:var(--c);min-width:3px}.drow.zero i{background:var(--line)}
 .drow b{text-align:right;font-variant-numeric:tabular-nums}
+/* history from the server */
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 4px}
+.chip{display:flex;align-items:center;gap:8px;background:var(--soft);border-radius:14px;padding:8px 12px;font-size:13px;min-width:0}
+.chip i{width:10px;height:10px;border-radius:50%;background:var(--c);flex:none}.chip b{font-size:15px}.chip span{color:var(--muted)}
+.hsel{min-height:20px;font-size:13px;color:var(--muted);margin-top:4px;display:flex;flex-wrap:wrap;gap:4px 12px}.hsel b{color:var(--ink)}
+.hsel i{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--c);margin-right:5px}
+.plot rect.sel{opacity:.55}
+.wide-field{margin-top:10px;background:var(--soft)}
 </style>
 <link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="icon" type="image/png" href="/icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Tonepie">
@@ -173,6 +181,9 @@ details{margin-top:14px}summary{cursor:pointer;font-weight:700;color:var(--muted
   <div class="seg" role="group" data-t-aria="period"><button data-range="30" aria-pressed="true" data-t="d30"></button><button data-range="90" aria-pressed="false" data-t="d90"></button></div></div>
   <div class="legend" id="legend"></div><div class="plot" id="plot"></div>
   <details id="trendTable"><summary data-t="showValues"></summary><div id="trendRows"></div></details></section>
+<section class="card trend" id="hist" hidden><div class="section-title"><h2 data-t="histTitle"></h2>
+  <div class="seg" role="group" data-t-aria="period"><button data-hist="90" aria-pressed="true" data-t="m3"></button><button data-hist="365" aria-pressed="false" data-t="y1"></button><button data-hist="0" aria-pressed="false" data-t="all"></button></div></div>
+  <div id="histBody"></div></section>
 <section class="card" id="visitsCard" hidden><div class="section-title"><h2 data-t="recent"></h2><span class="muted small" id="visitsHint"></span></div><div id="visits"></div></section>
 <section class="tiles" id="cleanWrap" hidden>
   <button class="tile card" id="clean"><span class="ico"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.800 5.200L19 9l-5.200 1.800L12 16l-1.800-5.200L5 9l5.200-1.800zM19 15l.9 2.600 2.600.9-2.600.9L19 22l-.9-2.600-2.600-.9 2.600-.9zM5 15l.7 2 2 .7-2 .7L5 20.500l-.7-2.100-2-.7 2-.7z"/></svg></span><b data-t="cleanNow"></b><small data-t="cleanSub"></small></button>
@@ -189,6 +200,10 @@ details{margin-top:14px}summary{cursor:pointer;font-weight:700;color:var(--muted
     <div class="opt"><label for="mAuto"><span data-t="auto"></span><small data-t="autoSub"></small></label><input class="switch" type="checkbox" id="mAuto"></div>
     <div class="opt"><label for="mWait"><span data-t="wait"></span><small data-t="waitSub"></small></label><div class="field"><input id="mWait" type="number" min="0" max="60" step="1" inputmode="numeric"><span>min</span></div></div>
     <div class="opt"><label for="mOdor"><span data-t="odor"></span><small data-t="odorSub"></small></label><input class="switch" type="checkbox" id="mOdor"></div>
+  <h3 class="sub" data-t="serverTitle"></h3><p class="muted small" data-t="serverText"></p>
+    <div class="opt"><label for="sOn"><span data-t="serverOn"></span><small id="sStatus"></small></label><input class="switch" type="checkbox" id="sOn"></div>
+    <div class="field wide-field"><input id="sUrl" type="url" placeholder="http://192.168.178.10:8090" autocomplete="off" spellcheck="false" maxlength="120"></div>
+    <div class="field wide-field"><input id="sKey" type="password" autocomplete="new-password" maxlength="64"></div>
   <details><summary data-t="binDetails"></summary>
     <div class="opt"><label for="optLimit"><span data-t="limit"></span><small data-t="limitSub"></small></label><div class="field"><input id="optLimit" type="number" min="5" max="500" step="1" inputmode="numeric" required><span data-t="visitsUnit"></span></div></div>
     <div class="opt"><label for="optTol"><span data-t="tol"></span><small data-t="tolSub"></small></label><div class="field"><input id="optTol" type="number" min="0.1" max="3" step="0.1" required><span>kg</span></div></div>
@@ -232,6 +247,13 @@ it:{title:'Lettiera',settings:'Impostazioni',binTitle:'CASSETTO',trend:'Andament
   cleanAsk:'Avvio la pulizia?',cleanText:'Il tamburo ruoterà. Controlla che nessun gatto sia dentro o stia entrando.',cleanSent:'Pulizia richiesta alla lettiera',unreachableApi:'Lettiera non raggiungibile',
   dayByDay:'Visite giorno per giorno',total:'visite',perDay:'al giorno',lastDays:n=>'negli ultimi '+n+' giorni',untimed:n=>plural(n,'visita','visite')+' senza orario non incluse.',
   keeps:'Lo storico conserva le ultime 64 visite di tutti i gatti.',tapCat:'Tocca un gatto per le visite giorno per giorno',
+  histTitle:'Storico',m3:'3 mesi',y1:'1 anno',all:'Tutto',serverTitle:'Storico sul server',
+  serverText:'Invia ogni visita a un tuo server (cartella server/ del progetto): lo storico non ha più il limite delle 64 visite.',
+  serverOn:'Invia i dati al server',keyKeep:'Chiave API (vuoto = invariata)',keyNew:'Chiave API del server',
+  syncOk:a=>'Ultimo invio '+a,syncPending:'Invio in corso…',syncErr:e=>'Errore: '+e,syncOff:'Disattivato',syncNever:'Nessun invio ancora',
+  histLoading:'Carico lo storico…',histError:u=>'Server storico non raggiungibile ('+u+').',histEmpty:'Sul server non ci sono ancora visite.',
+  perDay2:'al giorno',weekOf:d=>'Settimana del '+d,bagsLine:(n,d,v)=>plural(n,'cambio sacchetto','cambi sacchetto')+(d?' · in media ogni '+d+' giorni':'')+(v?' · circa '+plural(v,'visita','visite')+' per sacchetto':''),
+  months:'Per mese',month:'Mese',fromServer:'Include i dati del server storico.',unknownCats:'Non riconosciuti',
   letters:['D','L','M','M','G','V','S'],locale:'it-IT',other:'EN',otherName:'Switch to English'},
 en:{title:'Litter box',settings:'Settings',binTitle:'BIN',trend:'Weight trend',period:'Period',d30:'30 d',d90:'90 d',showValues:'Show values',recent:'Recent visits',
   cleanNow:'Clean now',cleanSub:'start a cycle',bag:'Bag change',litter:'Litter added',
@@ -258,6 +280,13 @@ en:{title:'Litter box',settings:'Settings',binTitle:'BIN',trend:'Weight trend',p
   cleanAsk:'Start cleaning?',cleanText:'The drum will rotate. Make sure no cat is inside or about to enter.',cleanSent:'Cleaning requested',unreachableApi:'Litter box unreachable',
   dayByDay:'Visits day by day',total:'visits',perDay:'per day',lastDays:n=>'in the last '+n+' days',untimed:n=>plural(n,'visit','visits')+' without a time not included.',
   keeps:'The history keeps the last 64 visits of all cats.',tapCat:'Tap a cat for its visits day by day',
+  histTitle:'History',m3:'3 months',y1:'1 year',all:'All',serverTitle:'History server',
+  serverText:'Sends every visit to your own server (server/ folder of the project): history is no longer limited to 64 visits.',
+  serverOn:'Send data to the server',keyKeep:'API key (empty = unchanged)',keyNew:'Server API key',
+  syncOk:a=>'Last sent '+a,syncPending:'Sending…',syncErr:e=>'Error: '+e,syncOff:'Off',syncNever:'Nothing sent yet',
+  histLoading:'Loading history…',histError:u=>'History server unreachable ('+u+').',histEmpty:'No visits on the server yet.',
+  perDay2:'per day',weekOf:d=>'Week of '+d,bagsLine:(n,d,v)=>plural(n,'bag change','bag changes')+(d?' · every '+d+' days on average':'')+(v?' · about '+plural(v,'visit','visits')+' per bag':''),
+  months:'By month',month:'Month',fromServer:'Includes data from the history server.',unknownCats:'Not recognised',
   letters:['S','M','T','W','T','F','S'],locale:'en-GB',other:'IT',otherName:'Passa all’italiano'}};
 let LANG=(()=>{try{const l=localStorage.getItem('lang');if(TEXT[l])return l}catch(e){}return /^it\b/i.test(navigator.language||'')?'it':'en'})();
 function t(k,...a){const v=TEXT[LANG][k];return typeof v==='function'?v(...a):v}
@@ -343,15 +372,19 @@ function render(){
   const when=(s,key,never)=>!s?t(never):ago(s)===t('now')?t('justNow'):t(key,ago(s));
   $('bagSub').textContent=when(S.bin.since,'bagWhen','bagNever');$('litterSub').textContent=when(S.litter_at,'litterWhen','litterNever');
   $('clean').disabled=busy||!m.ready||!!m.presence||!!m.fault||!!m.lock||m.pending;
-  $('foot').replaceChildren('Firmware '+S.firmware+' · ',h('a',{href:'/dev'},t('devPage')));drawTrend();
+  $('foot').replaceChildren('Firmware '+S.firmware+' · ',h('a',{href:'/dev'},t('devPage')));drawTrend();drawHist();
   if($('dlgCat').open)openCat(openCat.i);
 }
 // Visits of one cat per local day, from today back to the oldest visit kept (at least a week).
 function openCat(i){
   const c=S.config.cats[i];if(!c){$('dlgCat').close();return}openCat.i=i;
   const mine=S.visits.filter(v=>v.cat===i),timed=mine.filter(v=>v.t),oldest=S.visits.reduce((a,v)=>v.t&&v.t<a?v.t:a,Date.now()/1000);
-  const span=Math.min(60,Math.max(7,daysBack(oldest)+1)),counts=Array(span).fill(0);
+  const srv=syncOn()?histCache[90]?.h:null,srvDays={};
+  if(srv)for(const d of srv.days)srvDays[d.d]=d.v[c.name]||0;
+  const span=Math.min(60,Math.max(7,daysBack(oldest)+1,srv&&srv.firstVisit?daysBack(srv.firstVisit)+1:0)),counts=Array(span).fill(0);
   for(const v of timed){const k=daysBack(v.t);if(k>=0&&k<span)counts[k]++}
+  // Both sources hold only part of the truth (server: not yet sent; ESP: last 64 visits): take the larger.
+  if(srv)for(let k=0;k<span;k++)counts[k]=Math.max(counts[k],srvDays[dateKey(dayStart(k))]||0);
   const total=counts.reduce((a,b)=>a+b,0),most=Math.max(1,...counts);
   $('dlgCat').style.setProperty('--c',COLORS[c.color%6]);
   $('catHead').replaceChildren(avatar(c.color),h('div',{},h('h2',{},c.name),h('p',{class:'muted'},t('dayByDay'))));
@@ -360,9 +393,74 @@ function openCat(i){
   $('catDays').replaceChildren(...counts.map((n,k)=>{const s=dayStart(k);
     const label=k===0?t('Today'):k===1?t('Yesterday'):new Date(s*1000).toLocaleDateString(t('locale'),{weekday:'short',day:'numeric',month:'short'});
     return h('div',{class:'drow'+(n?'':' zero')},h('span',{},label),h('div',{},h('i',{style:'width:'+(n/most*100)+'%'})),h('b',{},String(n)))}));
-  const untimed=mine.length-timed.length;$('catNote').textContent=(untimed?t('untimed',untimed)+' ':'')+t('keeps');
+  const untimed=mine.length-timed.length;$('catNote').textContent=(untimed?t('untimed',untimed)+' ':'')+(srv?t('fromServer'):t('keeps'));
   if(!$('dlgCat').open)$('dlgCat').showModal();
+  if(syncOn()&&!srv)histFetch(90).then(()=>{if($('dlgCat').open&&openCat.i===i)openCat(i)}).catch(()=>{});
 }
+// ----- history kept by the optional server (the browser asks it directly; the ESP only sends data)
+const syncOn=()=>!!(S&&S.sync&&S.sync.enabled&&S.sync.url);
+const dateKey=s=>{const d=new Date(s*1000);return d.getFullYear()+'-'+two(d.getMonth()+1)+'-'+two(d.getDate())};
+const parseDay=k=>{const[y,m,d]=k.split('-').map(Number);return new Date(y,m-1,d)};
+let histRange=90;const histCache={};
+async function histFetch(days){
+  const sy=S.sync,c=histCache[days];if(c&&c.ok===sy.ok_at&&c.url===sy.url&&Date.now()-c.at<300000)return c.h;
+  const r=await fetch(sy.url+'/api/history?device='+encodeURIComponent(sy.device)+'&days='+days,{cache:'no-store'});if(!r.ok)throw 0;
+  const h=await r.json();histCache[days]={h,at:Date.now(),ok:sy.ok_at,url:sy.url};return h;
+}
+function syncText(){const y=S.sync;return !y.enabled?t('syncOff'):y.error?t('syncErr',y.error):y.pending?t('syncPending'):y.ok_at?t('syncOk',ago(y.ok_at)):t('syncNever')}
+async function drawHist(){
+  const card=$('hist'),body=$('histBody');card.hidden=!syncOn();if(card.hidden)return;
+  const days=histRange;if(!histCache[days])body.replaceChildren(h('p',{class:'empty'},t('histLoading')));
+  let H;try{H=await histFetch(days)}catch(e){body.replaceChildren(h('p',{class:'empty'},t('histError',S.sync.url)),h('p',{class:'muted small'},syncText()));return}
+  if(days!==histRange)return;
+  // Series: current cats first (their colours), then cats removed since, then unrecognised visits.
+  const cats=S.config.cats,names=cats.map(c=>c.name);
+  for(const d of H.days)for(const n of Object.keys(d.v))if(n&&!names.includes(n))names.push(n);
+  // Removed cats take palette colours no current cat uses; unrecognised visits are grey.
+  const free=COLORS.filter((x,k)=>!cats.some(c=>c.color%6===k));let nf=0;
+  const series=names.map(n=>{const c=cats.find(x=>x.name===n);return{n,label:n,color:c?COLORS[c.color%6]:free[nf++%Math.max(1,free.length)]||'var(--muted)'}});
+  if(H.days.some(d=>d.v['']))series.push({n:'',label:t('unknownCats'),color:'var(--muted)'});
+  if(!H.days.length){body.replaceChildren(h('p',{class:'empty'},t('histEmpty')),h('p',{class:'muted small'},syncText()));return}
+  const today=parseDay(dateKey(Date.now()/1000)),first=days?new Date(today.getFullYear(),today.getMonth(),today.getDate()-days+1):parseDay(H.days[0].d);
+  const span=Math.max(1,Math.round((today-first)/864e5)+1),monthly=span>200;
+  // Buckets: weeks starting on Monday, or months over long spans.
+  const bucketStart=d=>monthly?new Date(d.getFullYear(),d.getMonth(),1):new Date(d.getFullYear(),d.getMonth(),d.getDate()-(d.getDay()+6)%7);
+  const buckets=[];for(let d=bucketStart(first);d<=today;d=monthly?new Date(d.getFullYear(),d.getMonth()+1,1):new Date(d.getFullYear(),d.getMonth(),d.getDate()+7))buckets.push({start:d,v:{}});
+  const find=d=>{const s=bucketStart(d).getTime();return buckets.find(b=>b.start.getTime()===s)};
+  const totals={};for(const d of H.days){const b=find(parseDay(d.d));for(const[n,c]of Object.entries(d.v)){totals[n]=(totals[n]||0)+c;if(b)b.v[n]=(b.v[n]||0)+c}}
+  const chips=h('div',{class:'chips'},series.map(s=>h('div',{class:'chip',style:'--c:'+s.color},h('i'),h('div',{},h('b',{},String(totals[s.n]||0)),' ',s.label,h('br'),h('span',{},num((totals[s.n]||0)/span,1)+' '+t('perDay2'))))));
+  // stacked bars
+  const plot=h('div',{class:'plot'}),sel=h('div',{class:'hsel'});
+  body.replaceChildren(chips,plot,sel);
+  const W=plot.clientWidth||320,Hh=150,L=26,R=6,T=8,B=20,n=buckets.length,bw=(W-L-R)/n;
+  const max=Math.max(1,...buckets.map(b=>series.reduce((a,s)=>a+(b.v[s.n]||0),0)));
+  const stepY=max<=10?2:max<=25?5:max<=60?10:max<=150?25:50,top=Math.ceil(max/stepY)*stepY,y=v=>T+(1-v/top)*(Hh-T-B);
+  let g='';for(let v=0;v<=top;v+=stepY)g+=`<line class="grid" x1="${L}" x2="${W-R}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}"/><text x="${L-5}" y="${(y(v)+4).toFixed(1)}" text-anchor="end">${v}</text>`;
+  const fmt=d=>d.toLocaleDateString(t('locale'),monthly?{month:'short',year:'2-digit'}:{day:'numeric',month:'short'});
+  buckets.forEach((b,i)=>{let acc=0;const x=L+i*bw+Math.min(1.5,bw*.15),w=Math.max(1,bw-Math.min(3,bw*.3));
+    for(const s of series){const c=b.v[s.n]||0;if(!c)continue;g+=`<rect data-i="${i}" x="${x.toFixed(1)}" y="${y(acc+c).toFixed(1)}" width="${w.toFixed(1)}" height="${(y(acc)-y(acc+c)).toFixed(1)}" rx="${Math.min(3,w/3).toFixed(1)}" fill="${s.color}"/>`;acc+=c}});
+  const lab=[0,Math.floor(n/2),n-1].filter((v,i,a)=>a.indexOf(v)===i);
+  for(const i of lab)g+=`<text x="${(L+(i+.5)*bw).toFixed(1)}" y="${Hh-5}" text-anchor="${i===0?'start':i===n-1?'end':'middle'}">${fmt(buckets[i].start)}</text>`;
+  plot.innerHTML=`<svg width="${W}" height="${Hh}" viewBox="0 0 ${W} ${Hh}" role="img" aria-label="${t('histTitle')}">${g}</svg>`;
+  const show=i=>{const b=buckets[i];plot.querySelectorAll('rect').forEach(r=>r.classList.toggle('sel',+r.dataset.i!==i));
+    sel.replaceChildren(h('b',{},monthly?b.start.toLocaleDateString(t('locale'),{month:'long',year:'numeric'}):t('weekOf',fmt(b.start))),
+      ...series.filter(s=>b.v[s.n]).map(s=>h('span',{},h('i',{style:'--c:'+s.color}),s.label+' '+b.v[s.n])))};
+  plot.onpointermove=plot.onpointerdown=e=>{const i=Math.floor((e.clientX-plot.getBoundingClientRect().left-L)/bw);if(i>=0&&i<n)show(i)};
+  plot.onpointerleave=()=>{plot.querySelectorAll('rect').forEach(r=>r.classList.remove('sel'));sel.replaceChildren()};
+  // bag changes: interval and visits per bag
+  const bags=H.bags.filter(b=>b>=first.getTime()/1000);
+  if(bags.length){const gaps=bags.slice(1).map((b,i)=>(b-bags[i])/86400),per=bags.slice(1).map((b,i)=>H.days.filter(d=>{const s=parseDay(d.d).getTime()/1000;return s>=bags[i]-86399&&s<b-86399}).reduce((a,d)=>a+Object.values(d.v).reduce((x,y)=>x+y,0),0));
+    body.append(h('p',{class:'muted small',style:'margin-top:8px'},t('bagsLine',bags.length,gaps.length?Math.round(gaps.reduce((a,b)=>a+b,0)/gaps.length):0,per.length?Math.round(per.reduce((a,b)=>a+b,0)/per.length):0)))}
+  // per-month table: visits and average weight per cat
+  const months={};for(const d of H.days){const m=d.d.slice(0,7),row=months[m]||(months[m]={v:{},w:{},wn:{}});
+    for(const[k,c]of Object.entries(d.v))row.v[k]=(row.v[k]||0)+c;for(const[k,g]of Object.entries(d.w)){const c=d.v[k]||1;row.w[k]=(row.w[k]||0)+g*c;row.wn[k]=(row.wn[k]||0)+c}}
+  const named=series.filter(s=>s.n);
+  body.append(h('details',{},h('summary',{},t('months')),h('table',{},h('tr',{},h('th',{},t('month')),named.map(s=>h('th',{},s.label))),
+    Object.keys(months).sort().reverse().map(m=>h('tr',{},h('td',{},parseDay(m+'-01').toLocaleDateString(t('locale'),{month:'short',year:'numeric'})),
+      named.map(s=>{const r=months[m],c=r.v[s.n]||0;return h('td',{},c?c+(r.wn[s.n]?' · '+num(r.w[s.n]/r.wn[s.n]/1000,1)+' kg':''):'—')}))))),
+    h('p',{class:'muted small',style:'margin-top:8px'},syncText()));
+}
+document.querySelectorAll('[data-hist]').forEach(b=>b.onclick=()=>{histRange=+b.dataset.hist;document.querySelectorAll('[data-hist]').forEach(o=>o.setAttribute('aria-pressed',String(o===b)));drawHist()});
 const dayText=d=>new Date(d*864e5).toLocaleDateString(t('locale'),{day:'numeric',month:'short'});
 const signed=v=>(v>0?'+':v<0?'−':'')+num(Math.abs(v),1)+' kg';
 function drawTrend(){
@@ -403,7 +501,7 @@ function drawTrend(){
     daysWithData.slice().reverse().map(d=>h('tr',{},h('td',{},dayText(d)),series.map(s=>{const p=s.pts.find(p=>p[0]===d);return h('td',{},p?num(p[1],1)+' kg':'—')})))));
 }
 document.querySelectorAll('[data-range]').forEach(b=>b.onclick=()=>{range=+b.dataset.range;document.querySelectorAll('[data-range]').forEach(o=>o.setAttribute('aria-pressed',String(o===b)));drawTrend()});
-addEventListener('resize',()=>{if(S)drawTrend()});
+addEventListener('resize',()=>{if(S){drawTrend();drawHist()}});
 async function refresh(){
   try{const r=await fetch('/api/home',{cache:'no-store'});if(!r.ok)throw 0;const s=await r.json();token=s.token;S=s;
     const key=JSON.stringify([s.mcu,s.config,s.bin,s.visits,Math.floor(Date.now()/60000)]);if(key!==lastKey){lastKey=key;render()}}
@@ -437,6 +535,7 @@ function openSettings(){
   $('mAuto').checked=!!m.auto;$('mAuto').disabled=!on||m.auto==null;
   $('mWait').value=m.wait_min??'';$('mWait').disabled=!on||m.wait_min==null;
   $('mOdor').checked=!!m.odor;$('mOdor').disabled=!on||m.odor==null;
+  const y=S.sync||{};$('sOn').checked=!!y.enabled;$('sUrl').value=y.url||'';$('sKey').value='';$('sKey').placeholder=t(y.key_set?'keyKeep':'keyNew');$('sStatus').textContent=syncText();
   drawEditors();$('dlgSettings').showModal();
 }
 $('gear').onclick=openSettings;
@@ -450,6 +549,8 @@ $('formSettings').onsubmit=async e=>{e.preventDefault();
   if(!auto.disabled&&auto.checked!==!!m.auto)w.push({path:'/api/command',data:{action:auto.checked?'auto_on':'auto_off'}});
   if(!wait.disabled&&wait.value!==''&&+wait.value!==m.wait_min)w.push({path:'/api/value',data:{dp:117,value:+wait.value}});
   if(!odor.disabled&&odor.checked!==!!m.odor)w.push({path:'/api/command',data:{action:odor.checked?'odor_on':'odor_off'}});
+  const y=S.sync||{},sOn=$('sOn').checked,sUrl=$('sUrl').value.trim().replace(/\/+$/,''),sKey=$('sKey').value.trim();
+  if(sOn!==!!y.enabled||sUrl!==(y.url||'')||sKey){const r2=await api('/api/sync',{enabled:sOn?1:0,url:sUrl,key:sKey});toast(r2.message);if(!r2.ok)return;lastKey=''}
   $('dlgSettings').close();
   if(w.length){toast(t('sending'));const sent=await mcuWrites(w);await sleep(1500);await refresh();
     const s=S.mcu,kept=(auto.disabled||auto.checked===!!s.auto)&&(wait.disabled||wait.value===''||+wait.value===s.wait_min)&&(odor.disabled||odor.checked===!!s.odor);

@@ -40,7 +40,8 @@ EN = {"Impostazioni salvate": "Settings saved", "Aggiunta di lettiera registrata
       "Cassetto svuotato: conteggio azzerato": "Bin emptied: count reset", "Visita non trovata": "Visit not found",
       "Visita eliminata": "Visit deleted", "Visita aggiornata": "Visit updated", "Risorsa non trovata": "Not found",
       "Anteprima: impostazione finta aggiornata": "Preview: fake setting updated",
-      "Anteprima: nessun comando inviato": "Preview: no command sent"}
+      "Anteprima: nessun comando inviato": "Preview: no command sent",
+      "Impostazioni del server salvate": "Server settings saved"}
 
 
 def demo():
@@ -73,6 +74,9 @@ def empty():
 
 STATE = demo()
 LITTER_AT = int(time.time()) - 12 * 86400
+# History server shown by the page: run the server (server/) and fill it with tools/demo_history.py.
+SYNC = {"enabled": True, "url": "http://localhost:8090", "device": "tonepie-demo", "key_set": True,
+        "ok_at": int(time.time()) - 120, "error": "", "pending": False}
 MCU = {"online": True, "ready": True, "pending": False, "presence": False, "fault": 0, "lock": False,
        "auto": True, "wait_min": 0, "odor": True}
 
@@ -103,7 +107,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send(200, MANIFEST, "application/manifest+json")
         elif path == "/api/home":
             self.send(200, dict(STATE, litter_at=LITTER_AT, firmware="anteprima", token="mock", now=int(time.time()),
-                                mcu=MCU))
+                                mcu=MCU, sync=SYNC))
         elif path == "/api/state":
             self.send(200, {"firmware": "anteprima", "token": "mock", "ip": "127.0.0.1", "online": True, "ready": True,
                             "armed": False, "pending": False, "command": "Anteprima", "frames": 0, "bad_checksum": 0,
@@ -148,6 +152,11 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 visit.update(cat=int(form["cat"]), manual=True)
                 self.send(200, {"message": "Visita aggiornata"})
+        elif path == "/api/sync":
+            form = {k: v[0] for k, v in parse_qs(raw).items()}
+            SYNC.update(enabled=form.get("enabled") == "1", url=form.get("url", ""),
+                        key_set=SYNC["key_set"] or bool(form.get("key")))
+            self.send(200, {"message": "Impostazioni del server salvate"})
         elif path in ("/api/command", "/api/value"):
             form = {k: v[0] for k, v in parse_qs(raw).items()}
             action = form.get("action", "")

@@ -5,6 +5,8 @@
 #include <ArduinoJson.h>
 #include <Preferences.h>
 #include <Update.h>
+#include <HTTPClient.h>
+#include <WiFiClientSecure.h>
 #include <esp_system.h>
 #include <time.h>
 #include "config.h"
@@ -49,6 +51,18 @@ uint32_t litterAt=0; // when litter was last topped up
 bool kgSeen=false,clockStarted=false,otaAllowed=false,otaOk=false,apOn=false;
 String wifiSsid,wifiPassword; // NVS values set from /dev override the ones in config.h
 uint32_t wifiSeen=0;
+// History server (optional): the whole current state is posted to <url>/api/ingest whenever it changes.
+// The POST runs in its own task so a slow or absent server never delays the MCU.
+bool syncOn=false,syncDirty=true;
+String syncUrl,syncKey,deviceId,syncError;
+uint32_t syncLastTry=0,syncOkAt=0,syncFails=0;
+struct DeletedRef { uint16_t id; uint32_t epoch; };
+DeletedRef deletedRefs[16]; // visits deleted here, reported until the server has seen them
+uint8_t deletedCount=0,deletedSent=0;
+TaskHandle_t syncTask=nullptr;
+volatile bool syncBusy=false,syncDone=false;
+volatile int syncCode=0;
+String syncBody,syncTarget,syncAuth; // owned by the task while syncBusy
 
 bool online() { return heard && uint32_t(millis()-lastHeartbeat)<Config::LINK_TIMEOUT_MS; }
 bool isArmed() { return armed && uint32_t(millis()-armSince)<Config::ARM_MS; }
@@ -75,8 +89,8 @@ void sendFrame(uint8_t cmd,const uint8_t* p=nullptr,size_t n=0) {
 }
 bool clockSynced() { return time(nullptr)>1700000000; }
 uint32_t epochNow() { return clockSynced()?uint32_t(time(nullptr)):0; }
-void saveCats() { prefs.putBytes("cats",&cats,sizeof(cats)); }
-void saveVisits() { prefs.putBytes("visits",&history,sizeof(history));prefs.putBytes("bin",&bin,sizeof(bin)); }
+void saveCats() { prefs.putBytes("cats",&cats,sizeof(cats));syncDirty=true; }
+void saveVisits() { prefs.putBytes("visits",&history,sizeof(history));prefs.putBytes("bin",&bin,sizeof(bin));syncDirty=true; }
 void loadStore() {
   prefs.begin("litter",false);
   Litter::defaults(cats);memset(&history,0,sizeof(history));
@@ -89,6 +103,7 @@ void loadStore() {
   tracker.restore(prefs.isKey("count"),prefs.getUInt("count",0));
   litterAt=prefs.getUInt("litterAt",0);
   wifiSsid=prefs.getString("ssid",Config::WIFI_SSID);wifiPassword=prefs.getString("wpass",Config::WIFI_PASSWORD);
+  syncOn=prefs.getBool("syncOn",false);syncUrl=prefs.getString("syncUrl","");syncKey=prefs.getString("syncKey","");
 }
 // A recognised weight feeds the trend chart and moves the cat's reference weight.
 void learnWeight(int8_t cat,uint16_t grams,uint32_t epoch) {
@@ -298,6 +313,76 @@ void stateApi(){
   if(doc.overflowed()){reply(503,"Memoria dashboard insufficiente","Not enough memory for the dashboard");return;}
   String body;serializeJson(doc,body);server.sendHeader("Cache-Control","no-store");server.send(200,"application/json",body);
 }
+String snapshotJson(){
+  DynamicJsonDocument doc(14000);
+  doc["device"]=deviceId;doc["firmware"]=Config::FIRMWARE_VERSION;doc["now"]=epochNow();
+  JsonArray c=doc.createNestedArray("cats");
+  for(int i=0;i<cats.catCount;i++){auto j=c.createNestedObject();j["index"]=i;j["name"]=cats.cats[i].name;j["color"]=cats.cats[i].color;j["weightG"]=cats.cats[i].weightG;}
+  JsonObject b=doc.createNestedObject("bin");b["since"]=bin.since;b["visits"]=bin.visits;b["limit"]=cats.binLimitVisits;
+  doc["litterAt"]=litterAt;
+  JsonArray v=doc.createNestedArray("visits");
+  for(int i=0;i<history.count;i++){const auto& x=history.v[i];auto j=v.createNestedObject();
+    j["id"]=x.id;j["t"]=x.epoch;j["g"]=x.weightG;j["s"]=x.durationS;j["cat"]=x.cat;j["manual"]=(x.flags&Litter::VISIT_MANUAL)!=0;}
+  JsonArray d=doc.createNestedArray("deleted");
+  for(int i=0;i<deletedCount;i++){auto j=d.createNestedObject();j["id"]=deletedRefs[i].id;j["t"]=deletedRefs[i].epoch;}
+  String out;serializeJson(doc,out);return out;
+}
+void syncWorker(void*){
+  for(;;){
+    ulTaskNotifyTake(pdTRUE,portMAX_DELAY);
+    int code;
+    {
+      WiFiClient plain;WiFiClientSecure secure;HTTPClient http;
+      bool tls=syncTarget.startsWith("https://");
+      if(tls)secure.setInsecure(); // home servers usually have self-signed certificates: the API key is the protection
+      http.setConnectTimeout(4000);http.setTimeout(6000);
+      if(tls?http.begin(secure,syncTarget):http.begin(plain,syncTarget)){
+        http.addHeader("Content-Type","application/json");http.addHeader("Authorization",syncAuth);
+        code=http.POST(syncBody);http.end();
+      }else code=HTTPC_ERROR_CONNECTION_REFUSED;
+    }
+    syncBody=String();syncCode=code;syncDone=true;syncBusy=false;
+  }
+}
+void serviceSync(uint32_t now){
+  if(!syncTask || syncBusy)return;
+  if(syncDone){
+    syncDone=false;int code=syncCode;
+    if(code>=200 && code<300){
+      syncOkAt=epochNow();syncFails=0;syncError="";
+      // Deletions reported in this snapshot are now on the server; newer ones stay queued.
+      memmove(deletedRefs,deletedRefs+deletedSent,(deletedCount-deletedSent)*sizeof(DeletedRef));deletedCount-=deletedSent;
+    }else{
+      syncDirty=true;syncFails++;
+      syncError=code<0?HTTPClient::errorToString(code):String("HTTP ")+code+(code==401?" (API key)":"");
+      if(syncFails==1)logLine("Server storico: invio fallito, "+syncError);
+    }
+    deletedSent=0;
+  }
+  if(!syncOn || syncUrl.isEmpty() || syncKey.isEmpty() || WiFi.status()!=WL_CONNECTED || !clockSynced())return;
+  // Changes go out within seconds; otherwise a heartbeat every 15 min. Failures back off up to 5 min.
+  uint32_t wait=syncFails?min(300000u,15000u<<min(syncFails,uint32_t(4))):(syncDirty?3000u:900000u);
+  if(syncLastTry && uint32_t(now-syncLastTry)<wait)return;
+  syncLastTry=now;if(!syncLastTry)syncLastTry=1;syncDirty=false;
+  syncBody=snapshotJson();deletedSent=deletedCount;
+  syncTarget=syncUrl+"/api/ingest";syncAuth="Bearer "+syncKey;
+  syncBusy=true;xTaskNotifyGive(syncTask);
+}
+// Settings of the history server from the home page. An empty key keeps the one already saved.
+void syncApi(){
+  if(!protect())return;
+  bool on=server.arg("enabled")=="1";String url=server.arg("url"),key=server.arg("key");url.trim();key.trim();
+  while(url.endsWith("/"))url.remove(url.length()-1);
+  if(url.length()>120 || url.indexOf(' ')>=0 || (!url.isEmpty() && !url.startsWith("http://") && !url.startsWith("https://"))){
+    reply(400,"Indirizzo non valido: deve iniziare con http:// o https://","Invalid address: it must start with http:// or https://");return;}
+  if(!key.isEmpty() && (key.length()<16 || key.length()>64)){reply(400,"La chiave deve avere da 16 a 64 caratteri","The key must be 16 to 64 characters");return;}
+  if(key.isEmpty())key=syncKey;
+  if(on && (url.isEmpty() || key.isEmpty())){reply(400,"Per attivarlo servono indirizzo e chiave","Address and key are needed to enable it");return;}
+  syncOn=on;syncUrl=url;syncKey=key;prefs.putBool("syncOn",on);prefs.putString("syncUrl",url);prefs.putString("syncKey",key);
+  syncDirty=true;syncFails=0;syncLastTry=0;syncError="";syncOkAt=0;
+  logLine(String("Server storico ")+(on?"attivo: "+url:"disattivato"));
+  reply(200,"Impostazioni del server salvate","Server settings saved");
+}
 void homeApi(){
   if(!allowedHost()){reply(403,"Host non ammesso","Host not allowed");return;}
   DynamicJsonDocument doc(40000);
@@ -320,6 +405,9 @@ void homeApi(){
     JsonArray days=j.createNestedArray("days");JsonArray grams=j.createNestedArray("grams"); // daily averages, oldest first
     for(int k=0;k<weights.count[i];k++){days.add(weights.p[i][k].day);grams.add(weights.p[i][k].grams);}}
   doc["litter_at"]=litterAt;
+  JsonObject sync=doc.createNestedObject("sync");
+  sync["enabled"]=syncOn;sync["url"]=syncUrl;sync["device"]=deviceId;sync["key_set"]=!syncKey.isEmpty();
+  sync["ok_at"]=syncOkAt;sync["error"]=syncError;sync["pending"]=syncOn&&(syncDirty||syncBusy);
   JsonObject b=doc.createNestedObject("bin");b["since"]=bin.since;b["visits"]=bin.visits;
   JsonArray visitArray=doc.createNestedArray("visits"); // newest first
   for(int i=int(history.count)-1;i>=0;i--){const auto& v=history.v[i];auto j=visitArray.createNestedObject();
@@ -364,6 +452,8 @@ void visitApi(){
   if(!v){reply(404,"Visita non trovata","Visit not found");return;}
   String cat=server.arg("cat");uint32_t index;
   if(cat=="delete"){
+    if(deletedCount==16){memmove(deletedRefs,deletedRefs+1,15*sizeof(DeletedRef));deletedCount--;if(deletedSent)deletedSent--;}
+    deletedRefs[deletedCount++]={v->id,v->epoch};
     // Only visits after the last bag change are part of the current count.
     if(!(v->epoch && bin.since && v->epoch<bin.since) && bin.visits)bin.visits--;
     Litter::remove(history,uint16_t(id));saveVisits();reply(200,"Visita eliminata","Visit deleted");return;
@@ -402,7 +492,8 @@ void setupWeb(){
   server.on("/api/home",HTTP_GET,homeApi);
   server.on("/api/config",HTTP_POST,configApi);
   server.on("/api/visit",HTTP_POST,visitApi);
-  server.on("/api/litter",HTTP_POST,[]{if(!protect())return;litterAt=epochNow();prefs.putUInt("litterAt",litterAt);reply(200,"Aggiunta di lettiera registrata","Litter top-up recorded");});
+  server.on("/api/sync",HTTP_POST,syncApi);
+  server.on("/api/litter",HTTP_POST,[]{if(!protect())return;litterAt=epochNow();prefs.putUInt("litterAt",litterAt);syncDirty=true;reply(200,"Aggiunta di lettiera registrata","Litter top-up recorded");});
   server.on("/api/bin/reset",HTTP_POST,[]{if(!protect())return;bin.visits=0;bin.since=epochNow();saveVisits();reply(200,"Cassetto svuotato: conteggio azzerato","Bin emptied: count reset");});
   server.on("/api/arm",HTTP_POST,[]{if(!protect())return;
     if(server.arg("enabled")!="0" && server.arg("enabled")!="1"){reply(400,"Parametro non valido","Invalid parameter");return;}
@@ -455,6 +546,8 @@ void setup(){
   char randomToken[33];snprintf(randomToken,sizeof(randomToken),"%08lx%08lx%08lx%08lx",(unsigned long)esp_random(),(unsigned long)esp_random(),(unsigned long)esp_random(),(unsigned long)esp_random());token=randomToken;
   WiFi.persistent(false);WiFi.mode(WIFI_STA);WiFi.setHostname(Config::HOSTNAME);WiFi.setAutoReconnect(true);
   loadStore();
+  uint8_t mac[6];WiFi.macAddress(mac);char id[24];snprintf(id,sizeof(id),"tonepie-%02x%02x%02x",mac[3],mac[4],mac[5]);deviceId=id;
+  xTaskCreate(syncWorker,"sync",12288,nullptr,1,&syncTask);
   WiFi.begin(wifiSsid.c_str(),wifiPassword.c_str());lastWifiTry=wifiSeen=millis();setupWeb();
   logLine(String("Tonepie ")+Config::FIRMWARE_VERSION+" / UART1 RX"+String(Config::MCU_RX)+" TX"+String(Config::MCU_TX)+" 115200 8N1 / log CH340");
   sendFrame(0);lastHbTx=millis();
@@ -494,5 +587,6 @@ void loop(){
   if(pending.active && uint32_t(now-pending.since)>=5000){pending.active=false;commandIt="Report atteso non ricevuto: esito sconosciuto (nessun reinvio automatico)";commandEn="Expected report not received: result unknown (no automatic resend)";logLine(commandIt);}
   if(armed && !isArmed())armed=false;
   serviceTracker(now);
+  serviceSync(now);
   server.handleClient();delay(1);
 }

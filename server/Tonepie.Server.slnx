@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="Tonepie.Server.Tests/Tonepie.Server.Tests.csproj" />
+  <Project Path="Tonepie.Server/Tonepie.Server.csproj" />
+</Solution>

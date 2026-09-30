@@ -8,6 +8,7 @@ Replace the Tuya Wi-Fi module (WBR3) of a **Tonepie Ti Pro 25 / TPCBP-T2501** se
 | **Developer page** (`/dev`) | Raw datapoints, serial log, parser statistics, guarded manual commands, firmware update, Wi-Fi settings |
 | **Updates** | Over the air from the LAN (`tools/ota.py` or the `/dev` page) |
 | **Recovery** | Own Wi-Fi network `Tonepie-Setup` when the home Wi-Fi is unreachable |
+| **History server** (optional) | .NET + EF Core service in Docker ([`server/`](server/README.md)): keeps every visit, the home page shows months and years of history |
 
 The web pages are in Italian and English: the **IT/EN** button switches language (remembered by the browser, shared by both pages; the default follows the browser). The home page can be added to the phone's home screen and gets its own icon (`tools/make_icons.py` draws it into `include/icons.h`). All code, comments and documentation are in English.
 
@@ -152,6 +153,10 @@ Per the community mapping, the MCU reports three things around a visit: the day'
 
 The Tuya protocol exposes **no scale reading**: the MCU only sends the cat's weight after a visit, and there is no command to read the load cells. An estimate in grams would only be *visits × a guess*, so the page shows the real number of visits instead. Measuring waste for real (weight before and after each visit, and total since the last bag change) needs the ESP to listen directly to the HX711 load-cell amplifier on the main board; that extension is planned but not part of this firmware yet. The MCU's own bin-full logic (based on the number of cleanings, DP123/124) is untouched and keeps working.
 
+### Long-term history (optional server)
+
+The ESP keeps only the last 64 visits. With the [history server](server/README.md) running somewhere at home (Docker), enable it from the gear → *History server* (address and API key): the ESP posts its whole state to `/api/ingest` a few seconds after every change and every 15 minutes, in a background task so a slow or missing server never delays the MCU; failures are retried with a growing pause and nothing is lost while the server is down, as long as fewer than 64 visits happen meanwhile. The home page then shows a **History** card (3 months, 1 year, all: visits per week or month for each cat, bag changes, monthly table with average weights) and the cat pop-up covers 60 days. With the option off, nothing changes.
+
 ## Datapoints
 
 Verified on this unit: the UART handshake, and the *types* of the datapoints below. Meanings come from the community configuration for the Ti Pro25 in [tuya-local](https://github.com/make-all/tuya-local/blob/main/custom_components/tuya_local/devices/ti_pro25_catlitterbox.yaml) and from [issue #6071](https://github.com/make-all/tuya-local/issues/6071); [issue #1541](https://github.com/make-all/tuya-local/issues/1541) documents a related model with partly different numbering.
@@ -209,6 +214,8 @@ test/protocol_test.cpp     host tests for the protocol
 test/litter_test.cpp       host tests for recognition and visit detection
 tools/ota.py               over-the-air update
 tools/preview.py           local preview of the pages with fake data
+tools/demo_history.py      fills a history server with fake visits
+server/                    optional history server (.NET 10, EF Core, Docker)
 diagnostics/               first-contact capture from the real MCU
 docs/images/               photos of the modification
 ```
@@ -231,6 +238,7 @@ All `POST` requests need the `X-Tonepie-Token` header with the token returned by
 | `GET /api/home` | data for the home page |
 | `GET /api/state` | raw datapoints, log, parser statistics |
 | `POST /api/config` | cats, tolerance and bin limit in visits (JSON body) |
+| `POST /api/sync` | history server: `enabled`, `url`, `key` (empty key = unchanged) |
 | `POST /api/visit` | reassign or delete a visit (`id`, `cat` or `delete`) |
 | `POST /api/bin/reset`, `POST /api/litter` | record a bag change / litter top-up |
 | `POST /api/arm` | enable sends for 10 minutes (`enabled=1/0`) |

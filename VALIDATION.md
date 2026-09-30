@@ -47,6 +47,14 @@ Ai-Thinker ESP-C3-13-Kit (ESP32-C3 rev 0.3, CH340 on COM6), Tonepie Ti Pro 25 ma
 - Checked in a browser against the preview server (phone width, both languages, popup, settings save, icons, no console errors). Build: flash 917,650 B. Updated over the air; cats and visit history survived.
 - Adding the page to a real phone's home screen not tried yet.
 
+### 1.9.0 — history server
+
+- Server (`server/`, .NET 10 + EF Core 10): 4 integration tests pass (key check, validation, per-day aggregation in Europe/Rome, idempotent resend, cat reassignment, deletions by gap and explicit list, renumbered cats, CORS). Migrations generated for SQLite, PostgreSQL and SQL Server; only SQLite exercised.
+- Docker image built and run with Docker Desktop on the development PC; ingest, wrong key (401) and history checked with curl.
+- ESP updated over the air, sync enabled towards the container: first snapshot accepted within seconds (4 real visits of Ellie and Flipper, with weights). MCU still connected, no frame errors, 126 kB free heap.
+- History card and cat pop-up checked in a browser against a year of fake visits (`tools/demo_history.py`).
+- Not tried: HTTPS server, PostgreSQL/SQL Server, a long server outage (retry and backlog), the server on a NAS or Raspberry Pi.
+
 ## Not tested yet
 
 - Any physical command from this firmware: clean (101), empty (102), level litter (126), bag change (127), and the writes to 105/117/118/129.

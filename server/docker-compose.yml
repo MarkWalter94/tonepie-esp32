@@ -1,0 +1,16 @@
+# docker compose up -d --build     (needs a .env file: copy .env.example and set the key)
+services:
+  tonepie:
+    build: .
+    container_name: tonepie-server
+    restart: unless-stopped
+    ports:
+      - "8090:8090"
+    environment:
+      Tonepie__ApiKey: ${TONEPIE_API_KEY:?set TONEPIE_API_KEY in .env}
+      Tonepie__TimeZone: ${TONEPIE_TZ:-Europe/Rome}
+      # Another database instead of the SQLite file, e.g. PostgreSQL:
+      # Tonepie__Provider: Postgres
+      # ConnectionStrings__Tonepie: Host=db;Database=tonepie;Username=tonepie;Password=...
+    volumes:
+      - ./data:/data
