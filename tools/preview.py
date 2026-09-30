@@ -1,9 +1,10 @@
-"""Anteprima locale delle pagine web del firmware, con dati finti.
+"""Local preview of the firmware's web pages, with fake data.
 
-    python tools/preview.py [porta]
+    python tools/preview.py [port]
 
-Serve la home (/) e la pagina sviluppatore (/dev) estratte dagli header C++,
-senza ESP e senza lettiera. Scenari: /mock/demo, /mock/empty, /mock/full.
+Serves the home page (/) and the developer page (/dev) extracted from the C++
+headers, without an ESP or a litter box. The fake API answers in Italian like
+the firmware does. Scenarios: /mock/demo, /mock/empty, /mock/full.
 """
 import json
 import random
@@ -34,7 +35,7 @@ def demo():
         vid -= 1
         t -= random.randint(2 * 3600, 7 * 3600)
     today = now // 86400
-    for cat, drift in zip(cats, (6, -4)):  # grams per day: one slowly gains, one slowly loses
+    for cat, drift in zip(cats, (6, -4)):  # grams per day: one cat slowly gains, one slowly loses
         days = [d for d in range(today - 74, today + 1) if random.random() > 0.15]
         cat["days"] = days
         cat["grams"] = [round((cat["weight_g"] + drift * (d - today) + random.gauss(0, 45)) / 10) * 10 for d in days]
@@ -140,5 +141,5 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8765
-    print(f"Anteprima su http://localhost:{port}")
+    print(f"Preview at http://localhost:{port}")
     ThreadingHTTPServer(("127.0.0.1", port), Handler).serve_forever()

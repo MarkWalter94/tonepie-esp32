@@ -1,183 +1,236 @@
-# Tonepie Ti Pro 25 — ESP-C3 locale
+# Tonepie Ti Pro 25 — local ESP32-C3 firmware
 
-Firmware Arduino / PlatformIO **1.7.0-maintenance** per sostituire il modulo WBR3, mantenendo la MCU Tonepie. UART **115200, 8N1, RX GPIO6, TX GPIO7**. Interfaccia web in italiano, senza CDN o servizi cloud, raggiungibile su `http://tonepie.local`, `http://tonepie.fritz.box` o sull'IP assegnato dal FRITZ!Box.
+Replace the Tuya Wi-Fi module (WBR3) of a **Tonepie Ti Pro 25 / TPCBP-T2501** self-cleaning litter box with an **Ai-Thinker ESP-C3-13-Kit**, and run it completely locally: no Tuya cloud, no app, no account. The original MCU keeps driving motors, sensors and safety logic; the ESP32-C3 only speaks the Tuya MCU serial protocol to it and serves a web interface on your LAN.
 
-## Pagine
-
-- **`/` — home di uso quotidiano.** Gatti riconosciuti dal peso, visite di oggi e degli ultimi 7 giorni, stima del peso di escrementi nel cassetto con avviso di svuotamento, elenco visite correggibile, pulsante "Pulisci ora".
-- **`/dev` — pagina sviluppatore MCU** (datapoint grezzi, log, comandi con abilitazione). Si apre dal link discreto "Pagina sviluppatore" in fondo alla home, oppure digitando l'indirizzo.
-
-### Come funziona la home
-
-- **Riconoscimento gatti.** Nelle impostazioni (ingranaggio) si inseriscono nome e peso di ogni gatto, fino a 4. A ogni visita il peso riportato dalla MCU viene confrontato con quelli di riferimento: vince il più vicino entro la tolleranza (predefinita 0,5 kg); a pari distanza o fuori tolleranza la visita resta "non riconosciuta" e si assegna a mano toccandola. La MCU riporta il peso a passi di 0,1 kg: due gatti con meno di ~0,3 kg di differenza non sono distinguibili in modo affidabile.
-- **Peso che cambia nel tempo.** A ogni visita riconosciuta il peso di riferimento del gatto si sposta di un quinto verso il peso misurato, così il riconoscimento segue il gatto che cresce o dimagrisce. Anche una correzione manuale insegna il nuovo peso. Il valore scritto a mano nelle impostazioni resta comunque modificabile.
-- **Andamento del peso.** Per ogni gatto viene salvata la media giornaliera del peso (ultimi 90 giorni con dati); la home la mostra in un grafico a 30 o 90 giorni con valori consultabili anche in tabella.
-- **Rilevamento visite.** Secondo la mappatura comunitaria: DP7 visite del giorno (si azzera ogni giorno), DP6 peso del gatto, DP8 durata (s). Il peso arriva in grammi su alcune Tonepie (segnalazione tuya-local #1541, 600–10000 g) e in kg ×10 su altre: il firmware accetta entrambi i formati e li distingue dall'ordine di grandezza. Una visita nasce dall'aumento di DP7 oppure da un report spontaneo di peso/durata; i tre segnali vengono fusi anche se arrivano a minuti di distanza. I valori ripetuti nelle risposte alle query non creano visite. Le visite avvenute a ESP spento vengono recuperate dal contatore all'avvio (senza peso, tranne l'ultima). **Non ancora verificato con un gatto reale**: logica in `include/litter_logic.h`, test in `test/litter_test.cpp`.
-- **Cassetto.** La MCU non pesa gli escrementi: il valore è una **stima**, visite × grammi medi per visita (predefinito 50 g, modificabile). Oltre la soglia (predefinita 1500 g) la home chiede di svuotare; "Cambio sacchetto" azzera la stima. Il conteggio "cassetto pieno" interno della MCU (DP123/124, a numero di pulizie) non viene toccato e resta attivo in parallelo.
-- **Dati.** Gatti, ultime 64 visite, storico dei pesi e stima del cassetto sono salvati nella flash dell'ESP (NVS) e sopravvivono a riavvii e aggiornamenti firmware.
-- **Orologio.** Per l'orario delle visite l'ESP usa NTP (`fritz.box`, poi `pool.ntp.org`), fuso orario italiano. La stessa ora viene data alla MCU quando la chiede.
-- **Impostazioni della lettiera.** Dall'ingranaggio si cambiano anche tre impostazioni tenute dalla MCU: pulizia automatica (DP105), minuti di pausa prima della pulizia (DP117, 0–60) e deodorante automatico dopo la pulizia (DP129). Vengono inviate solo le voci modificate, e solo con la lettiera collegata; la home controlla poi che la MCU riporti il nuovo valore.
-- **Cambio sacchetto** azzera la stima del cassetto e invia alla MCU il comando "bag replace" (DP127). **Aggiunta lettiera** registra la data e invia "level litter" (DP126), che livella la sabbia. Con la lettiera non pronta registrano soltanto. Cosa facciano fisicamente i due comandi su questo esemplare non è ancora stato osservato; DP126 non viene mai riportato dalla MCU, quindi è l'unico comando inviato senza un report recente di riscontro. Entrambi hanno gli stessi veti di presenza, fault e blocco della pulizia.
-- **Pulisci ora** usa lo stesso percorso protetto della pagina sviluppatore (dati recenti, veti presenza/fault/blocco) dopo una conferma.
-
-Anteprima delle pagine senza ESP, con dati finti: `python tools/preview.py` e apri `http://localhost:8765`.
-
-## USB e pin: versione aggiornata
-
-**Non occorre isolare, dissaldare o modificare il CH340.** La UART Tonepie è stata spostata su GPIO6/7. GPIO20/21 restano dedicati alla UART0 del CH340: flash e log a 115200 passano dalla normale micro-USB del kit.
-
-Questo progetto usa `HardwareSerial(1)` per Tonepie e `Serial` per CH340. Non è necessario aggiungere un connettore USB nativo su GPIO18/19. Mantieni GPIO6/7 liberi da altri circuiti o debugger JTAG esterni.
-
-**Migrazione dalla prima versione:** a entrambe le schede spente, sposta il filo prima su GPIO20 a GPIO6 e quello prima su GPIO21 a GPIO7. GND resta comune. Non collegare più la Tonepie ai pin RX/TX stampati sul kit (GPIO20/21). Il nuovo firmware richiede questo nuovo cablaggio; non è compatibile con quello precedente.
-
-## Cablaggio con WBR3 rimosso
-
-| Segnale sulla scheda Tonepie | ESP-C3-13-Kit |
+| | |
 |---|---|
-| TX della **MCU**, pista che entrava in RXD del WBR3 | GPIO6 / RX |
-| RX della **MCU**, pista che usciva da TXD del WBR3 | GPIO7 / TX |
-| GND | GND |
+| **Home page** (`/`) | Cats recognised by weight, visits today and over the last 7 days, weight trend chart, waste-bin estimate, recent visits, maintenance buttons, litter box settings |
+| **Developer page** (`/dev`) | Raw datapoints, serial log, parser statistics, guarded manual commands, firmware update, Wi-Fi settings |
+| **Updates** | Over the air from the LAN (`tools/ota.py` or the `/dev` page) |
+| **Recovery** | Own Wi-Fi network `Tonepie-Setup` when the home Wi-Fi is unreachable |
 
-Le etichette RX/TX del WBR3 sono dal punto di vista del modulo rimosso: non confonderle con quelle della MCU. Verifica le piste; non basarti su una posizione dei pad dedotta da una foto. La versione precedente della conversazione invertiva questi riferimenti in un passaggio.
+The web pages are in Italian (they were written for one household). All code, comments and documentation are in English.
 
-Logica UART a **3,3 V**, non RS232 e non 5 V. Per le prime prove alimenta il kit separatamente via USB/5V appropriati e lascia Tonepie sulla propria alimentazione, con GND comune; non collegare la 3V3 della Tonepie finché capacità e tensione non sono verificate. Effettua saldature e verifiche di continuità a dispositivi spenti.
+> **Status.** The firmware runs on the real unit: handshake, datapoint reads and the pages are verified. Physical commands (clean, empty, level, bag change), the settings writes and the visit detection have **not** been exercised with the litter box assembled yet. See [VALIDATION.md](VALIDATION.md) for exactly what was and was not tested.
 
-## Compilazione e flash
+## The hardware modification
 
-1. Installa VS Code con PlatformIO IDE, oppure PlatformIO Core. Apri questa cartella, quella con `platformio.ini`.
-2. Il profilo `esp32-c3-devkitm-1` fornisce il target generico **ESP32-C3 / flash 4 MB**; i pin sono espliciti e non dipendono dal LED o dal pinout DevKitM. Verifica che il tuo modulo abbia flash da 4 MB.
-3. Copia `include/secrets.example.h` in `include/secrets.h` e inserisci nome e password del Wi-Fi e una password di aggiornamento. `secrets.h` è escluso da git: le password finiscono solo nel firmware compilato, non nel repository. Non vengono inviate dalla dashboard né stampate nei log.
-4. Compila:
+### Parts
+
+- Ai-Thinker **ESP-C3-13-Kit** (also sold as NodeMCU ESP-C3-13/13U-Kit). It has a CH340 USB-serial converter on board, used for the first flash and for logs.
+- Four thin wires, a soldering iron, some hot glue or tape, optionally a small perfboard as an adapter.
+- A multimeter for continuity checks.
+
+### Step 1 — open the litter box and locate the WBR3
+
+The main board is marked *Design by Jiqu, www.tonepie.com*. The Tuya **WBR3** module sits in the top-left corner (`U14`).
+
+![Tonepie main board with the original WBR3 module](docs/images/tonepie-mainboard-original.jpg)
+
+### Step 2 — remove the WBR3
+
+Desolder the module (hot air, or low-melt solder / a wide tip and patience). Only four of its pads are needed afterwards:
+
+| WBR3 pad | Meaning from the main board's point of view |
+|---|---|
+| `3V3` | 3.3 V supply for the module |
+| `GND` | ground |
+| `RXD` | **MCU TX**: the MCU talks to the module on this trace |
+| `TXD` | **MCU RX**: the module talks to the MCU on this trace |
+
+The labels `RXD`/`TXD` are from the removed module's point of view, so they are the *opposite* of what you connect on the ESP side. Identify the pads with the [WBR3 datasheet](https://developer.tuya.com/en/docs/iot/wbr3-module-datasheet?id=K9dujs2k5nriy) and confirm `GND` and `3V3` with a continuity check against the board's `GND` and `VCC` test points before soldering anything.
+
+### Step 3 — solder four wires to the pads
+
+![Wires soldered to the WBR3 pads, fixed with hot glue](docs/images/wbr3-pads-wired.jpg)
+
+Red and black are the supply pair, orange and blue are the UART pair. The wires are fixed with hot glue so they cannot lift the pads.
+
+### Step 4 — connect the ESP-C3-13-Kit
+
+![ESP-C3-13-Kit pin labels](docs/images/esp-c3-13-kit-pinout.jpg)
+
+| WBR3 pad | ESP-C3-13-Kit pin |
+|---|---|
+| `RXD` (MCU TX) | **IO6** — UART1 RX |
+| `TXD` (MCU RX) | **IO7** — UART1 TX |
+| `GND` | `GND` |
+| `3V3` | `3V3` |
+
+Everything is 3.3 V logic: no level shifting, no RS-232. **Do not use the kit's `RX`/`TX` pins (GPIO20/21)**: they are wired to the on-board CH340 and are needed for USB flashing and logs. GPIO6/7 are free on this kit; keep them clear of anything else (JTAG probes included).
+
+In this build the ESP is powered from the litter box's 3.3 V through the WBR3 `3V3` pad, so it starts and stops together with the litter box. When you plug the kit's micro-USB into a computer while the litter box is powered, two supplies meet on the 3.3 V rail; the author's unit tolerated it, but the safer routine is to power the board from one source at a time and to use the over-the-air update once the first flash is done.
+
+A small perfboard makes a convenient adapter between the four wires and the kit's header:
+
+![Perfboard adapter between the litter box wires and the ESP kit](docs/images/adapter-board.jpg)
+
+### Step 5 — first flash over USB, then everything over the air
+
+See [Building and flashing](#building-and-flashing). After the first flash, updates go over Wi-Fi.
+
+## Building and flashing
+
+Requirements: [PlatformIO](https://platformio.org/) (CLI or VS Code extension). The project pins `espressif32@6.10.0` (Arduino core 2.0.17) and `ArduinoJson 6.21.5`.
+
+1. Copy `include/secrets.example.h` to `include/secrets.h` and fill in your Wi-Fi SSID, Wi-Fi password and an update password of your choice. `secrets.h` is ignored by git; the passwords end up only in the compiled firmware.
+2. Build:
 
    ```sh
    pio run -e tonepie-c3
    ```
 
-5. Collega la normale micro-USB del kit (CH340). Durante la migrazione lascia scollegati i vecchi fili su GPIO20/21. Individua la porta con `pio device list` e carica:
+3. First flash, over the kit's micro-USB (CH340). Find the port with `pio device list`, then:
 
    ```sh
    pio run -e tonepie-c3 -t upload --upload-port COM6
    ```
 
-   Sostituisci `COM6` se la porta cambia. Se non entra nel bootloader, tieni premuto BOOT, premi/rilascia RESET e poi rilascia BOOT. La UART Tonepie su GPIO6/7 è separata dalla seriale di programmazione.
+   If the chip does not enter the bootloader, hold `BOOT`, tap `RESET`, release `BOOT`.
 
-6. Per i log scegli la stessa porta **CH340**, chiudendo eventuali altri monitor prima del flash:
+4. Logs (115200 baud, same port; close the monitor before flashing again):
 
    ```sh
    pio device monitor --port COM6 --baud 115200
    ```
 
-7. Avvia, verifica l'IP nel log USB oppure nella lista dispositivi del FRITZ!Box. Il C3 usa Wi-Fi 2,4 GHz: la rete deve essere disponibile su quella banda. Apri `http://tonepie.local`; se mDNS non è supportato dal client o attraversa VLAN, usa l'IP. Senza Wi-Fi per 3 minuti viene aperta la rete di recupero `Tonepie-Setup` (vedi sotto).
+5. Open `http://tonepie.local` — or the IP shown in the log / your router — from a phone or computer on the same 2.4 GHz network. With a FRITZ!Box router, `http://tonepie.fritz.box` also works.
 
-La pagina è incorporata nel firmware: nessun caricamento filesystem/LittleFS separato. La compilazione fissa piattaforma e dipendenza JSON per rendere riproducibile il progetto.
-
-## Aggiornamento via rete
-
-Dopo il primo caricamento via USB non serve più il cavo:
+### Updating over the air
 
 ```sh
 pio run -e tonepie-c3
-python tools/ota.py            # oppure: python tools/ota.py http://<indirizzo> <file.bin>
+python tools/ota.py                     # default: http://192.168.178.94 and the last build
+python tools/ota.py http://<address> <file.bin>
 ```
 
-In alternativa, dalla pagina `/dev`: sezione "Aggiornamento firmware via rete", scegli `.pio/build/tonepie-c3/firmware.bin` e inserisci la password. La password è `OTA_PASSWORD` in `include/secrets.h`. Il firmware nuovo viene scritto nella seconda partizione e verificato prima del riavvio: se il caricamento si interrompe resta attivo quello vecchio. Gatti, visite e pesi non vengono toccati. Durante l'aggiornamento gli invii alla MCU sono disabilitati.
+The script reads the update password from `include/secrets.h`, uploads the image, waits for the reboot and prints the new version. The same can be done from the `/dev` page (section *Aggiornamento firmware via rete*). The image goes to the spare OTA partition and is verified before it becomes bootable, so an interrupted upload leaves the running firmware untouched. Cats, visits, weights and settings are kept.
 
-## Se il Wi-Fi di casa non c'è più
+### If the home Wi-Fi disappears
 
-Se il modulo non riesce a collegarsi al Wi-Fi per 3 minuti (router cambiato, password cambiata, rete spenta) apre una propria rete di recupero:
+After 3 minutes without a connection (router replaced, password changed, network down) the module opens its own network:
 
-- rete **`Tonepie-Setup`**, password uguale a quella del Wi-Fi scritto in `include/secrets.h`;
-- dal telefono o dal PC collegati a quella rete e apri **`http://192.168.4.1`** (home) o **`http://192.168.4.1/dev`**;
-- da `/dev` puoi caricare un firmware nuovo oppure, nella sezione "Rete Wi-Fi", inserire nome e password della nuova rete di casa (serve la password di aggiornamento). Se le credenziali sono sbagliate, dopo 3 minuti la rete di recupero riappare.
+- SSID **`Tonepie-Setup`**, password = the Wi-Fi password compiled into the firmware;
+- open **`http://192.168.4.1`** (home) or **`http://192.168.4.1/dev`**;
+- from `/dev` upload a firmware or enter the new home Wi-Fi credentials (section *Rete Wi-Fi*, update password required). Wrong credentials simply bring the recovery network back after 3 minutes.
 
-Appena il Wi-Fi di casa torna e nessuno è collegato alla rete di recupero, questa si spegne da sola. Le credenziali salvate da `/dev` hanno la precedenza su quelle di `secrets.h` e sopravvivono agli aggiornamenti. Il Bluetooth non è usato: l'ESP32-C3 ha solo BLE, che per aggiornare il firmware richiederebbe un'app dedicata e sarebbe molto più lento.
+The recovery network switches itself off as soon as the home Wi-Fi is back and nobody is connected to it. Credentials saved from `/dev` override the compiled ones and survive updates. Bluetooth is deliberately not used: the C3 only has BLE, which would need a dedicated app for updates.
 
-## Prima messa in servizio
+## Using the home page
 
-1. Verifica i nuovi pin GPIO6/7, le masse e i livelli. Collega la MCU con WBR3 già rimosso e lascia il CH340 integro.
-2. Attendi heartbeat e inizializzazione. Senza risposta la dashboard resta offline e rifiuta comandi. Non occorre lasciare un computer connesso.
-3. Esegui **Aggiorna dalla MCU** e osserva DP e tipi. L'assenza di un DP significa sconosciuto, non `false` o zero.
-4. Confronta i report con cambiamenti eseguiti dai comandi fisici originali. Verifica soprattutto BOOL 101/102/105 e VALUE 117/118.
-5. Abilita gli invii dalla dashboard per una sessione di dieci minuti. La prima prova deve essere sorvegliata e senza animale nella lettiera. Pulizia e svuotamento hanno una conferma nel browser.
-6. Un messaggio “trasmesso” significa soltanto invio UART. “DP riportato” significa che la MCU ha riportato quel valore, **non** conferma di movimento completato; dopo 5 secondi senza report l'esito resta sconosciuto. Non viene ritentato automaticamente un comando.
+1. Tap the gear and enter each cat's name and weight (up to four). The reference weight follows the cat over time: every recognised visit moves it one fifth of the way towards the measured value.
+2. Visits appear in the list as they happen. Tap one to correct the cat (or delete it if it was not a visit); corrections also teach the new weight.
+3. The **waste bin** card shows the estimate described below; **Cambio sacchetto** (bag change) resets it and tells the MCU about the new bag.
+4. **Pulisci ora** starts a cleaning cycle; **Aggiunta lettiera** (litter added) records the date and asks the MCU to level the litter. Both ask for confirmation and are refused when a cat is detected inside, a fault is active or the child lock is on.
+5. The *Lettiera* section of the settings changes three values kept by the MCU: automatic cleaning, the delay before cleaning (0–60 min) and automatic deodorising after cleaning. Only changed values are sent, and the page checks that the MCU reports them back.
 
-## DP: cosa è confermato e cosa no
+The **weight trend** chart plots each cat's daily average weight over 30 or 90 days, with a table view for the exact values.
 
-**Verificati sul tuo esemplare comunicazione UART e tipi ricevuti:** DP101/102/105 BOOL, DP117/118 VALUE. Non sono stati provati comandi di movimento o modifiche delle impostazioni: il loro significato resta basato sulle fonti comunitarie Ti Pro25/TPCBP-T2501. Cattura del primo collegamento in `diagnostics/mcu-first-contact.json`; dettagli in `VALIDATION.md`.
+### Cat recognition
 
-| DP | Mappatura comunitaria usata | Trattamento |
-|---|---|---|
-| 101 | pulizia, bool | invio `true` |
-| 102 | svuotamento, bool | invio `true` |
-| 105 | auto-clean, bool | ON/OFF |
-| 117 | attesa, value, minuti | 0–60 |
-| 118 | intervallo, value, minuti | 0–120 |
-| 126 | livella lettiera, bool (mai riportato dalla MCU) | invio `true` |
-| 127 | cambio sacchetto, bool | invio `true` |
-| 129 | deodorante dopo la pulizia, bool | ON/OFF |
-| 22 | fault | grezzo; bit non decodificati |
-| 24 | stato | grezzo; ordine ENUM da verificare |
-| 104 / 114 | presenza / blocco bambini | sola lettura, veto aggiuntivo quando attivi |
-| altri | significato non assunto | sola lettura |
+A visit's weight is compared with the reference weights: the nearest cat within the tolerance (default 0.5 kg) wins; a tie or a reading outside the tolerance leaves the visit *unrecognised* for you to assign by hand. The MCU reports the weight either in grams or in 0.1 kg steps depending on the model; both are accepted. Two cats closer than ~0.3 kg cannot be told apart reliably.
 
-La configurazione `tuya-local` documenta le cinque scritture utilizzate. I suoi intervalli 117/118 includono zero, e la tua MCU li riporta entrambi a zero: il firmware accetta quindi anche lo zero. DP129 è indicato dalla stessa fonte come "odor removal after cleaning".
+### Visit detection
 
-Una segnalazione Ti Pro25 documenta la presenza all'avvio di **7, 22, 24, 101, 102, 105, 114, 116, 117, 118, 123–128, 131**. Riferisce che **6, 8, 104, 113, 129, 134** possono comparire solo dopo l'uso. Queste sono osservazioni su altre unità, non garanzie per la tua scheda.
+Per the community mapping, the MCU reports three things around a visit: the day's visit counter (DP7), the cat weight (DP6) and the visit duration (DP8). Their order and timing on the real unit are not verified, so any of them opens a visit and the others are merged if they arrive within 15 minutes; values repeated inside a query response never create visits, and visits missed while the ESP was off are recovered from the counter at boot. Logic in `include/litter_logic.h`, tests in `test/litter_test.cpp`.
 
-Da verificare: tipo UART effettivo, eventuali scale/unità, ordine degli ENUM e significato dei bit fault. In particolare i nomi stringa cloud di DP24/116/131 non determinano automaticamente i byte ENUM UART. Il codice non li traduce arbitrariamente. DP sconosciuti vengono mostrati senza scritture generiche.
+### The waste-bin estimate, and why it is an estimate
 
-## Sicurezze e limiti
+The Tuya protocol exposes **no scale reading**: the MCU only sends the cat's weight after a visit, and there is no command to read the load cells. The bin content is therefore *visits × grams per visit* (default 50 g, configurable), shown as an estimate. Measuring waste for real (weight before and after each visit, and total since the last bag change) needs the ESP to listen directly to the HX711 load-cell amplifier on the main board; that extension is planned but not part of this firmware yet. The MCU's own bin-full logic (based on the number of cleanings, DP123/124) is untouched and keeps working.
 
-- Nessun GPIO di motore/sensore viene pilotato; nessuna simulazione di presenza, calibrazione, reset MCU o aggiornamento MCU. DP113 è escluso dalle scritture. Tutto il controllo fisico rimane alla MCU originale.
-- I controlli web aggiuntivi non certificano l'assenza dell'animale: dati presenza mancanti o non recenti non possono provarla. Non si sostituiscono alle protezioni originali, che devono essere verificate nella prova reale.
-- Sono scrivibili **solo 101/102/105/117/118/126/127/129**. Il server richiede heartbeat recente, init completata, DP dello stesso tipo ricevuto negli ultimi 60 s, sessione abilitata e nessun comando pendente. Nessuna scrittura DP viene fatta all'avvio o alla riconnessione.
-- La sessione si disabilita dopo timeout, perdita Wi-Fi o riavvio/perdita MCU. Non è salvata in flash. Le impostazioni numeriche vengono inviate alla MCU; la loro persistenza dipende dal firmware Tonepie.
-- Interfaccia HTTP per rete domestica fidata, senza account/TLS. Token per avvio, controllo Host e header dedicato contrastano richieste browser da altri siti; **non sono autenticazione contro un client della LAN**. Non esporre la porta 80 su Internet.
-- Con il Wi-Fi attivo la rete è dichiarata alla MCU come pienamente connessa (`4`): con lo stato `3` (solo router) la lettiera lascia lampeggiare la spia Wi-Fi. Non esiste comunque alcun collegamento al cloud Tuya. Il valore è `NETWORK_CONNECTED` in `include/config.h`.
+## Datapoints
 
-## Protocollo e diagnostica
+Verified on this unit: the UART handshake, and the *types* of the datapoints below. Meanings come from the community configuration for the Ti Pro25 in [tuya-local](https://github.com/make-all/tuya-local/blob/main/custom_components/tuya_local/devices/ti_pro25_catlitterbox.yaml) and from [issue #6071](https://github.com/make-all/tuya-local/issues/6071); [issue #1541](https://github.com/make-all/tuya-local/issues/1541) documents a related model with partly different numbering.
 
-Frame `55 AA`, versione TX `00`, versione RX prevista `03`, lunghezza big-endian, checksum somma modulo 256. Payload massimo 1024 byte, buffer RX UART 4096 byte, timeout inter-byte 250 ms. Il parser recupera da rumore, checksum errati, lunghezze e frame incompleti; valida l'intero report TLV prima di applicarlo. BOOL, VALUE 32 bit big-endian, RAW, STRING, ENUM, BITMAP sono riconosciuti. VALUE visualizzato con segno; invii limitati agli intervalli positivi dei form.
+| DP | Type seen | Community meaning | Firmware use |
+|---|---|---|---|
+| 6 | — (after a visit) | cat weight | recognition, weight chart |
+| 7 | VALUE | visits per day | visit detection |
+| 8 | — (after a visit) | visit duration, s | visit list |
+| 22 | BITMAP | fault bits | status, command veto |
+| 24 | ENUM | state (index order unknown) | shown raw on `/dev` |
+| 101 | BOOL | clean | **write** `true` |
+| 102 | BOOL | empty all litter | **write** `true` (`/dev` only) |
+| 104 | — | cat presence | command veto |
+| 105 | BOOL | auto clean | **write** on/off |
+| 114 | BOOL | child lock | command veto |
+| 117 | VALUE | delay before cleaning, min | **write** 0–60 |
+| 118 | VALUE | cleaning interval, min | **write** 0–120 (`/dev` only) |
+| 123 / 124 | VALUE | bin-full calibration / cleanings | shown raw |
+| 126 | never reported | level litter (button) | **write** `true` |
+| 127 | BOOL | bag replaced (button) | **write** `true` |
+| 129 | BOOL | deodorise after cleaning | **write** on/off |
+| others | various | not assumed | read-only |
 
-Heartbeat ogni secondo finché offline, ogni 5 s online; perdita dopo 15 s. Init sequenziale heartbeat → prodotto (`01`) → modo (`02`) → rete (`03`) e query (`08`), con ritenti delle richieste init. Reset MCU rilevato tramite heartbeat `00`; cache invalidata. Query manuale e query 500 ms dopo una scrittura. DP `07` ricevuti anche spontaneamente. Richieste pairing `04/05` riconosciute senza cancellare le credenziali fisse. Richiesta ora `1C`: risposta con l'ora locale presa da NTP, oppure “non disponibile” finché l'orologio non è sincronizzato.
+Only the eight DPs marked **write** can be written, each through a dedicated endpoint with a fixed type. No generic DP write, no MCU reset (DP113), no calibration (DP115), no firmware update of the MCU.
 
-Cache fino a 64 DP, 128 byte conservati per DP, visualizzazione hex limitata; 60 righe di log in RAM, perse al riavvio. Log USB scartato se il buffer non è pronto; i log web continuano. Protocollo sconosciuto/versione inattesa segnalato. Nessun supporto a protocolli Tuya alternativi, aggiornamento della MCU o provisioning Smart Life.
+## Safety model
 
-Se non arriva nulla: controlla TX/RX dal punto di vista della MCU, GPIO6/7, GND, alimentazione e velocità. Se arrivano checksum errati: controlla livelli e cablaggi. Se il DP è rifiutato: esegui query; non modificare a caso il tipo. Se la MCU non risponde a query in stato rete `3`, documenta i frame prima di estendere il protocollo.
+- Motors and sensors stay under the original MCU. The ESP never drives a GPIO of the litter box and never simulates a sensor.
+- A write requires: a recent heartbeat, completed initialisation, the target DP reported with the expected type in the last 60 s (except the never-reported DP126), no pending command, 2 s since the previous write, and a send session enabled from the page. The home page enables a session only for the duration of one confirmed action.
+- Anything that may move the drum is additionally refused while the MCU reports a cat inside, a fault or the child lock. These checks **do not prove the litter box is empty**; the MCU's own protections remain the real safeguard.
+- "Sent" means the frame left the UART. "Confirmed" means the MCU reported the requested value, not that the movement completed. Nothing is retried automatically.
+- The HTTP interface is for a trusted home network: no accounts, no TLS. A per-boot token and a Host check stop cross-site requests from a browser; they do not authenticate LAN clients. Firmware upload and Wi-Fi changes additionally require the update password. Do not expose port 80 to the Internet.
+- The network state told to the MCU is `4` ("connected") once Wi-Fi is up, otherwise the MCU keeps its Wi-Fi LED blinking. Nothing ever connects to the Tuya cloud. Local time from NTP is given to the MCU when it asks.
 
-## Struttura e test
+## Protocol notes
+
+Frames `55 AA`, module version `00`, MCU version `03`, big-endian length, checksum = sum mod 256, payload up to 1024 bytes. Heartbeat every 1 s until online, then every 5 s; link lost after 15 s. Init sequence: heartbeat → product info (`01`) → working mode (`02`) → network state (`03`) → query (`08`). MCU reset detected from a heartbeat reply of `00`. Pairing requests (`04`/`05`) are acknowledged without touching credentials. The parser recovers from noise, bad checksums, oversized lengths and truncated frames, and validates a whole DP report before applying it.
+
+First contact capture: `diagnostics/mcu-first-contact.json` (product id `yn6wqmizg7abe5k8`, MCU firmware 1.0.15).
+
+## Project layout
 
 ```text
-platformio.ini             target e dipendenze fissate
-include/config.h           pin, tempi e nomi di rete
-include/secrets.example.h  modello per secrets.h (password, fuori dal repository)
-include/tuya_protocol.h    parser/encoder indipendente da Arduino
-include/web_ui.h           pagina sviluppatore (/dev)
-include/web_home.h         home di uso quotidiano (/)
-include/litter_logic.h     gatti, visite, stima cassetto: indipendente da Arduino
-src/main.cpp               UART, init, API HTTP, cache, logging, salvataggio NVS
-test/protocol_test.cpp     test host del protocollo
-test/litter_test.cpp       test host di riconoscimento gatti e rilevamento visite
-tools/preview.py           anteprima locale delle pagine con dati finti
-tools/ota.py               aggiornamento del firmware via rete
-VALIDATION.md              risultati della verifica effettuata
+platformio.ini             pinned platform and dependencies
+include/config.h           pins, timings, network names
+include/secrets.example.h  template for secrets.h (passwords, not in git)
+include/tuya_protocol.h    Tuya MCU frame encoder/parser, Arduino-independent
+include/litter_logic.h     cat matching, visit detection, weight log, Arduino-independent
+include/web_home.h         home page (embedded HTML, Italian)
+include/web_ui.h           developer page (embedded HTML, Italian)
+src/main.cpp               UART, init, HTTP API, NVS storage, OTA, recovery network
+test/protocol_test.cpp     host tests for the protocol
+test/litter_test.cpp       host tests for recognition and visit detection
+tools/ota.py               over-the-air update
+tools/preview.py           local preview of the pages with fake data
+diagnostics/               first-contact capture from the real MCU
+docs/images/               photos of the modification
 ```
 
-Test host con un compilatore C++11, dalla cartella del progetto:
+Host tests (any C++11 compiler):
 
 ```sh
-g++ -std=c++11 -Wall -Wextra -pedantic -Iinclude test/protocol_test.cpp -o protocol_test
-./protocol_test
+g++ -std=c++11 -Wall -Wextra -pedantic -Iinclude test/protocol_test.cpp -o protocol_test && ./protocol_test
+g++ -std=c++11 -Wall -Wextra -pedantic -Iinclude test/litter_test.cpp -o litter_test && ./litter_test
 ```
 
-Su Windows esegui `./protocol_test.exe`. I test coprono frame noti, rumore, checksum, payload massimo, recupero da troncamento, TLV malformati, wrap di millis e un milione di byte pseudocasuali. Non sostituiscono il collaudo hardware.
+Page preview without hardware: `python tools/preview.py`, then open `http://localhost:8765` (`/mock/empty` and `/mock/full` switch scenarios).
 
-## Fonti consultate
+## HTTP API
 
-- [Protocollo Wi-Fi MCU Tuya](https://developer.tuya.com/en/docs/iot/mcu-protocol?id=K9hrdpyujeotg): framing e comandi base.
-- [Configurazione Ti Pro25 nel repository tuya-local](https://github.com/make-all/tuya-local/blob/main/custom_components/tuya_local/devices/ti_pro25_catlitterbox.yaml): mappature comunitarie, non specifica UART del produttore Tonepie.
-- [Segnalazione Ti Pro25 #6071](https://github.com/make-all/tuya-local/issues/6071): datapoint effettivamente segnalati e varianti di disponibilità.
-- [Specifiche Ai-Thinker ESP-C3-13-Kit, copia del documento del produttore](https://iot-kmutnb.github.io/blogs/esp32/esp32_c3_ai_thinker/esp-c3-13-kit-v1.0_spec.pdf).
-- [Espressif: API UART Arduino](https://docs.espressif.com/projects/arduino-esp32/en/latest/api/serial.html): scelta dei pin RX/TX della UART.
+All `POST` requests need the `X-Tonepie-Token` header with the token returned by `GET /api/state` or `GET /api/home`; `/api/update` and `/api/wifi` also need `X-Tonepie-Ota`.
 
-La comunicazione UART è stata verificata sulla tua Tonepie a 115200 8N1 su GPIO6/7, con handshake e query riusciti. Non è una misura elettrica con oscilloscopio. Stato delle verifiche: 30 settembre 2026.
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/home` | data for the home page |
+| `GET /api/state` | raw datapoints, log, parser statistics |
+| `POST /api/config` | cats and estimate settings (JSON body) |
+| `POST /api/visit` | reassign or delete a visit (`id`, `cat` or `delete`) |
+| `POST /api/bin/reset`, `POST /api/litter` | record a bag change / litter top-up |
+| `POST /api/arm` | enable sends for 10 minutes (`enabled=1/0`) |
+| `POST /api/query` | ask the MCU for all datapoints |
+| `POST /api/command` | `clean`, `empty`, `auto_on`, `auto_off`, `odor_on`, `odor_off`, `bag`, `level` |
+| `POST /api/value` | `dp=117|118`, `value` in minutes |
+| `POST /api/update` | firmware image (multipart) |
+| `POST /api/wifi` | new Wi-Fi credentials, then reboot |
+
+## Sources
+
+- [Tuya Wi-Fi MCU serial protocol](https://developer.tuya.com/en/docs/iot/mcu-protocol?id=K9hrdpyujeotg)
+- [tuya-local: Ti Pro25 device configuration](https://github.com/make-all/tuya-local/blob/main/custom_components/tuya_local/devices/ti_pro25_catlitterbox.yaml), [issue #6071](https://github.com/make-all/tuya-local/issues/6071), [issue #1541](https://github.com/make-all/tuya-local/issues/1541)
+- [Ai-Thinker ESP-C3-13-Kit specification](https://iot-kmutnb.github.io/blogs/esp32/esp32_c3_ai_thinker/esp-c3-13-kit-v1.0_spec.pdf)
+- [Tuya WBR3 module datasheet](https://developer.tuya.com/en/docs/iot/wbr3-module-datasheet?id=K9dujs2k5nriy)
+- [Arduino-ESP32 serial API](https://docs.espressif.com/projects/arduino-esp32/en/latest/api/serial.html)
+
+This is a hobby project for one litter box. It is not affiliated with Tonepie or Tuya. Modifying the appliance voids its warranty; you do it at your own risk, and the first tests of any movement should be supervised and without a cat nearby.

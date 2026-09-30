@@ -1,10 +1,10 @@
-"""Aggiorna il firmware via rete, senza cavo USB.
+"""Update the firmware over the network, without the USB cable.
 
-    python tools/ota.py [indirizzo] [file.bin]
+    python tools/ota.py [address] [file.bin]
 
-Predefiniti: http://192.168.178.94 e .pio/build/tonepie-c3/firmware.bin
-(compila prima con `pio run -e tonepie-c3`). La password di aggiornamento
-viene letta da include/secrets.h e non viene mostrata.
+Defaults: http://192.168.178.94 and .pio/build/tonepie-c3/firmware.bin
+(build first with `pio run -e tonepie-c3`). The update password is read
+from include/secrets.h and never printed.
 """
 import json
 import re
@@ -34,7 +34,7 @@ def main():
     data = image.read_bytes()
 
     state = get_state(base)
-    print(f"Versione attuale: {state['firmware']} · invio {image.name} ({len(data)} byte)")
+    print(f"Running version: {state['firmware']} - sending {image.name} ({len(data)} bytes)")
     boundary = uuid.uuid4().hex
     body = (f"--{boundary}\r\nContent-Disposition: form-data; name=\"firmware\"; filename=\"firmware.bin\"\r\n"
             "Content-Type: application/octet-stream\r\n\r\n").encode() + data + f"\r\n--{boundary}--\r\n".encode()
@@ -45,7 +45,7 @@ def main():
         with OPENER.open(request, timeout=120) as response:
             print(json.load(response).get("message", ""))
     except urllib.error.HTTPError as error:
-        print("Rifiutato:", json.load(error).get("message", error.reason))
+        print("Rejected:", json.load(error).get("message", error.reason))
         return 1
 
     for _ in range(20):  # the module restarts on the new firmware
@@ -53,11 +53,11 @@ def main():
         try:
             state = get_state(base)
             if state.get("uptime_s", 999) < 60:
-                print(f"Riavviato con la versione {state['firmware']}")
+                print(f"Rebooted with version {state['firmware']}")
                 return 0
         except OSError:
             pass
-    print("Il modulo non è tornato raggiungibile: controlla l'alimentazione e la rete.")
+    print("The module did not come back: check power and network.")
     return 1
 
 
