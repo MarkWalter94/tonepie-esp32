@@ -12,6 +12,7 @@ import random
 import re
 import sys
 import time
+import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs
@@ -113,6 +114,14 @@ class Handler(BaseHTTPRequestHandler):
                             "armed": False, "pending": False, "command": "Anteprima", "frames": 0, "bad_checksum": 0,
                             "bad_length": 0, "timeouts": 0, "bad_dp": 0, "heap": 0, "uptime_s": 0, "reset_reason": 1,
                             "dps": [], "logs": ["anteprima locale: nessuna MCU"]})
+        elif path == "/api/history":  # relayed to the history server, like the ESP does
+            query = self.path.partition("?")[2]
+            days = parse_qs(query).get("days", ["90"])[0]
+            try:
+                with urllib.request.urlopen(f"{SYNC['url']}/api/history?device={SYNC['device']}&days={days}", timeout=5) as r:
+                    self.send(200, r.read())
+            except OSError as e:
+                self.send(502, {"message": f"Server storico non raggiungibile: {e}"})
         elif path.startswith("/mock/"):
             STATE = {"demo": demo, "empty": empty}.get(path[6:], demo)()
             if path[6:] == "full":

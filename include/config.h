@@ -12,7 +12,7 @@ constexpr char AP_SSID[] = "Tonepie-Setup";
 constexpr uint32_t AP_AFTER_MS = 180000;
 // Required to replace the firmware over the network (tools/ota.py or the /dev page).
 constexpr auto& OTA_PASSWORD = Secrets::OTA_PASSWORD;
-constexpr char FIRMWARE_VERSION[] = "1.9.0-history-server";
+constexpr char FIRMWARE_VERSION[] = "1.9.1-history-relay";
 constexpr int MCU_RX = 6;
 constexpr int MCU_TX = 7;
 constexpr uint32_t MCU_BAUD = 115200;

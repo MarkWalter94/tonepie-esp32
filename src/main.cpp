@@ -55,7 +55,7 @@ uint32_t wifiSeen=0;
 // The POST runs in its own task so a slow or absent server never delays the MCU.
 bool syncOn=false,syncDirty=true;
 String syncUrl,syncKey,deviceId,syncError;
-uint32_t syncLastTry=0,syncOkAt=0,syncFails=0;
+uint32_t syncLastTry=0,syncOkAt=0,syncFails=0,wifiUpAt=0;
 struct DeletedRef { uint16_t id; uint32_t epoch; };
 DeletedRef deletedRefs[16]; // visits deleted here, reported until the server has seen them
 uint8_t deletedCount=0,deletedSent=0;
@@ -360,6 +360,7 @@ void serviceSync(uint32_t now){
     deletedSent=0;
   }
   if(!syncOn || syncUrl.isEmpty() || syncKey.isEmpty() || WiFi.status()!=WL_CONNECTED || !clockSynced())return;
+  if(uint32_t(now-wifiUpAt)<10000)return; // right after connecting the first request often fails
   // Changes go out within seconds; otherwise a heartbeat every 15 min. Failures back off up to 5 min.
   uint32_t wait=syncFails?min(300000u,15000u<<min(syncFails,uint32_t(4))):(syncDirty?3000u:900000u);
   if(syncLastTry && uint32_t(now-syncLastTry)<wait)return;
@@ -367,6 +368,29 @@ void serviceSync(uint32_t now){
   syncBody=snapshotJson();deletedSent=deletedCount;
   syncTarget=syncUrl+"/api/ingest";syncAuth="Bearer "+syncKey;
   syncBusy=true;xTaskNotifyGive(syncTask);
+}
+// History for the home page, fetched from the server by the ESP: the page never talks to the server itself,
+// so browsers that block requests from one local address to another (and ad blockers) do not matter.
+class ClientOut : public Stream { // streams the server's answer to the browser without buffering it
+public:
+  size_t write(uint8_t c) override { return write(&c,1); }
+  size_t write(const uint8_t* b,size_t n) override { server.sendContent((const char*)b,n);return n; }
+  int available() override { return 0; } int read() override { return -1; } int peek() override { return -1; } void flush() override {}
+};
+void historyApi(){
+  if(!allowedHost()){reply(403,"Host non ammesso","Host not allowed");return;}
+  if(!syncOn || syncUrl.isEmpty()){reply(404,"Server storico non configurato","History server not configured");return;}
+  uint32_t days=90;parseUnsigned(server.arg("days"),days);if(days>3660)days=3660;
+  WiFiClient plain;WiFiClientSecure secure;HTTPClient http;
+  bool tls=syncUrl.startsWith("https://");if(tls)secure.setInsecure();
+  http.setConnectTimeout(3000);http.setTimeout(5000);
+  String url=syncUrl+"/api/history?device="+deviceId+"&days="+String(days);
+  if(!(tls?http.begin(secure,url):http.begin(plain,url))){reply(502,"Server storico non raggiungibile","History server unreachable");return;}
+  int code=http.GET();
+  if(code!=200){String e=code<0?HTTPClient::errorToString(code):String("HTTP ")+code;http.end();
+    reply(502,"Server storico non raggiungibile: "+e,"History server unreachable: "+e);return;}
+  server.sendHeader("Cache-Control","no-store");server.setContentLength(CONTENT_LENGTH_UNKNOWN);server.send(200,"application/json","");
+  ClientOut out;http.writeToStream(&out);http.end();server.sendContent("");
 }
 // Settings of the history server from the home page. An empty key keeps the one already saved.
 void syncApi(){
@@ -493,6 +517,7 @@ void setupWeb(){
   server.on("/api/config",HTTP_POST,configApi);
   server.on("/api/visit",HTTP_POST,visitApi);
   server.on("/api/sync",HTTP_POST,syncApi);
+  server.on("/api/history",HTTP_GET,historyApi);
   server.on("/api/litter",HTTP_POST,[]{if(!protect())return;litterAt=epochNow();prefs.putUInt("litterAt",litterAt);syncDirty=true;reply(200,"Aggiunta di lettiera registrata","Litter top-up recorded");});
   server.on("/api/bin/reset",HTTP_POST,[]{if(!protect())return;bin.visits=0;bin.since=epochNow();saveVisits();reply(200,"Cassetto svuotato: conteggio azzerato","Bin emptied: count reset");});
   server.on("/api/arm",HTTP_POST,[]{if(!protect())return;
@@ -561,7 +586,7 @@ void loop(){
   if(uint32_t(now-lastHbTx)>=(online()?5000u:1000u)){sendFrame(0);lastHbTx=now;}
   if(online() && (initState==Init::Product||initState==Init::Mode) && uint32_t(now-lastInitTx)>=2000){sendFrame(initState==Init::Product?1:2);lastInitTx=now;}
   bool connected=WiFi.status()==WL_CONNECTED;
-  if(connected && !wasWifi){logLine("Wi-Fi connesso: http://"+WiFi.localIP().toString());mdns=MDNS.begin(Config::HOSTNAME);if(mdns)MDNS.addService("http","tcp",80);
+  if(connected && !wasWifi){wifiUpAt=now;logLine("Wi-Fi connesso: http://"+WiFi.localIP().toString());mdns=MDNS.begin(Config::HOSTNAME);if(mdns)MDNS.addService("http","tcp",80);
     // Clock for visit times only: the MCU time request (1C) is still answered "not available".
     if(!clockStarted){clockStarted=true;configTzTime(Config::TIMEZONE,Config::NTP_PRIMARY,Config::NTP_FALLBACK);}}
   if(!connected && wasWifi){armed=false;if(mdns)MDNS.end();mdns=false;logLine("Wi-Fi scollegato");}

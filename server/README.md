@@ -24,7 +24,7 @@ Other databases: set `Tonepie__Provider` (`Sqlite`, `Postgres`, `SqlServer`) and
 | `GET /api/devices` | known devices |
 | `GET /health` | liveness |
 
-History reads are open to the local network (CORS `*`, GET only) because the page served by the ESP reads them from the browser; only writes need the key. Do not expose the port to the internet.
+History reads need no key: the ESP fetches them for its home page (`GET /api/history` on the ESP relays this endpoint), and CORS allows GET from any origin for other local tools. Only writes need the key. Do not expose the port to the internet.
 
 ### How the ESP's data is merged
 

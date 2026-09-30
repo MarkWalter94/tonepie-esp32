@@ -155,7 +155,7 @@ The Tuya protocol exposes **no scale reading**: the MCU only sends the cat's wei
 
 ### Long-term history (optional server)
 
-The ESP keeps only the last 64 visits. With the [history server](server/README.md) running somewhere at home (Docker), enable it from the gear → *History server* (address and API key): the ESP posts its whole state to `/api/ingest` a few seconds after every change and every 15 minutes, in a background task so a slow or missing server never delays the MCU; failures are retried with a growing pause and nothing is lost while the server is down, as long as fewer than 64 visits happen meanwhile. The home page then shows a **History** card (3 months, 1 year, all: visits per week or month for each cat, bag changes, monthly table with average weights) and the cat pop-up covers 60 days. With the option off, nothing changes.
+The ESP keeps only the last 64 visits. With the [history server](server/README.md) running somewhere at home (Docker), enable it from the gear → *History server* (address and API key): the ESP posts its whole state to `/api/ingest` a few seconds after every change and every 15 minutes, in a background task so a slow or missing server never delays the MCU; failures are retried with a growing pause and nothing is lost while the server is down, as long as fewer than 64 visits happen meanwhile. The home page then shows a **History** card, fetched through the ESP (`GET /api/history` on the ESP relays the server, so browsers never have to reach the server themselves) (3 months, 1 year, all: visits per week or month for each cat, bag changes, monthly table with average weights) and the cat pop-up covers 60 days. With the option off, nothing changes.
 
 ## Datapoints
 
@@ -239,6 +239,7 @@ All `POST` requests need the `X-Tonepie-Token` header with the token returned by
 | `GET /api/state` | raw datapoints, log, parser statistics |
 | `POST /api/config` | cats, tolerance and bin limit in visits (JSON body) |
 | `POST /api/sync` | history server: `enabled`, `url`, `key` (empty key = unchanged) |
+| `GET /api/history?days=n` | history from the server, relayed by the ESP |
 | `POST /api/visit` | reassign or delete a visit (`id`, `cat` or `delete`) |
 | `POST /api/bin/reset`, `POST /api/litter` | record a bag change / litter top-up |
 | `POST /api/arm` | enable sends for 10 minutes (`enabled=1/0`) |

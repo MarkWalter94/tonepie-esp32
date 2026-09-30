@@ -251,9 +251,9 @@ it:{title:'Lettiera',settings:'Impostazioni',binTitle:'CASSETTO',trend:'Andament
   serverText:'Invia ogni visita a un tuo server (cartella server/ del progetto): lo storico non ha più il limite delle 64 visite.',
   serverOn:'Invia i dati al server',keyKeep:'Chiave API (vuoto = invariata)',keyNew:'Chiave API del server',
   syncOk:a=>'Ultimo invio '+a,syncPending:'Invio in corso…',syncErr:e=>'Errore: '+e,syncOff:'Disattivato',syncNever:'Nessun invio ancora',
-  histLoading:'Carico lo storico…',histError:u=>'Server storico non raggiungibile ('+u+').',histEmpty:'Sul server non ci sono ancora visite.',
+  histLoading:'Carico lo storico…',histError:u=>'Server storico non raggiungibile ('+u+'). Controlla che sia acceso.',histEmpty:'Sul server non ci sono ancora visite.',
   perDay2:'al giorno',weekOf:d=>'Settimana del '+d,bagsLine:(n,d,v)=>plural(n,'cambio sacchetto','cambi sacchetto')+(d?' · in media ogni '+d+' giorni':'')+(v?' · circa '+plural(v,'visita','visite')+' per sacchetto':''),
-  months:'Per mese',month:'Mese',fromServer:'Include i dati del server storico.',unknownCats:'Non riconosciuti',
+  months:'Per mese',month:'Mese',fromServer:'Include i dati del server storico.',srvWait:'Server storico non raggiungibile: per ora vedi solo i dati della lettiera.',unknownCats:'Non riconosciuti',
   letters:['D','L','M','M','G','V','S'],locale:'it-IT',other:'EN',otherName:'Switch to English'},
 en:{title:'Litter box',settings:'Settings',binTitle:'BIN',trend:'Weight trend',period:'Period',d30:'30 d',d90:'90 d',showValues:'Show values',recent:'Recent visits',
   cleanNow:'Clean now',cleanSub:'start a cycle',bag:'Bag change',litter:'Litter added',
@@ -284,9 +284,9 @@ en:{title:'Litter box',settings:'Settings',binTitle:'BIN',trend:'Weight trend',p
   serverText:'Sends every visit to your own server (server/ folder of the project): history is no longer limited to 64 visits.',
   serverOn:'Send data to the server',keyKeep:'API key (empty = unchanged)',keyNew:'Server API key',
   syncOk:a=>'Last sent '+a,syncPending:'Sending…',syncErr:e=>'Error: '+e,syncOff:'Off',syncNever:'Nothing sent yet',
-  histLoading:'Loading history…',histError:u=>'History server unreachable ('+u+').',histEmpty:'No visits on the server yet.',
+  histLoading:'Loading history…',histError:u=>'History server unreachable ('+u+'). Check that it is running.',histEmpty:'No visits on the server yet.',
   perDay2:'per day',weekOf:d=>'Week of '+d,bagsLine:(n,d,v)=>plural(n,'bag change','bag changes')+(d?' · every '+d+' days on average':'')+(v?' · about '+plural(v,'visit','visits')+' per bag':''),
-  months:'By month',month:'Month',fromServer:'Includes data from the history server.',unknownCats:'Not recognised',
+  months:'By month',month:'Month',fromServer:'Includes data from the history server.',srvWait:'History server unreachable: showing only the litter box’s own data for now.',unknownCats:'Not recognised',
   letters:['S','M','T','W','T','F','S'],locale:'en-GB',other:'IT',otherName:'Passa all’italiano'}};
 let LANG=(()=>{try{const l=localStorage.getItem('lang');if(TEXT[l])return l}catch(e){}return /^it\b/i.test(navigator.language||'')?'it':'en'})();
 function t(k,...a){const v=TEXT[LANG][k];return typeof v==='function'?v(...a):v}
@@ -377,7 +377,7 @@ function render(){
 }
 // Visits of one cat per local day, from today back to the oldest visit kept (at least a week).
 function openCat(i){
-  const c=S.config.cats[i];if(!c){$('dlgCat').close();return}openCat.i=i;
+  const c=S.config.cats[i];if(!c){$('dlgCat').close();return}if(!$('dlgCat').open)openCat.failed=false;openCat.i=i;
   const mine=S.visits.filter(v=>v.cat===i),timed=mine.filter(v=>v.t),oldest=S.visits.reduce((a,v)=>v.t&&v.t<a?v.t:a,Date.now()/1000);
   const srv=syncOn()?histCache[90]?.h:null,srvDays={};
   if(srv)for(const d of srv.days)srvDays[d.d]=d.v[c.name]||0;
@@ -393,18 +393,18 @@ function openCat(i){
   $('catDays').replaceChildren(...counts.map((n,k)=>{const s=dayStart(k);
     const label=k===0?t('Today'):k===1?t('Yesterday'):new Date(s*1000).toLocaleDateString(t('locale'),{weekday:'short',day:'numeric',month:'short'});
     return h('div',{class:'drow'+(n?'':' zero')},h('span',{},label),h('div',{},h('i',{style:'width:'+(n/most*100)+'%'})),h('b',{},String(n)))}));
-  const untimed=mine.length-timed.length;$('catNote').textContent=(untimed?t('untimed',untimed)+' ':'')+(srv?t('fromServer'):t('keeps'));
+  const untimed=mine.length-timed.length;$('catNote').textContent=(untimed?t('untimed',untimed)+' ':'')+(srv?t('fromServer'):syncOn()?(openCat.failed?t('srvWait'):''):t('keeps'));
   if(!$('dlgCat').open)$('dlgCat').showModal();
-  if(syncOn()&&!srv)histFetch(90).then(()=>{if($('dlgCat').open&&openCat.i===i)openCat(i)}).catch(()=>{});
+  if(syncOn()&&!srv&&!openCat.failed)histFetch(90).then(()=>{if($('dlgCat').open&&openCat.i===i)openCat(i)}).catch(()=>{openCat.failed=true;if($('dlgCat').open&&openCat.i===i)openCat(i)});
 }
-// ----- history kept by the optional server (the browser asks it directly; the ESP only sends data)
+// ----- history kept by the optional server, relayed by the ESP (/api/history)
 const syncOn=()=>!!(S&&S.sync&&S.sync.enabled&&S.sync.url);
 const dateKey=s=>{const d=new Date(s*1000);return d.getFullYear()+'-'+two(d.getMonth()+1)+'-'+two(d.getDate())};
 const parseDay=k=>{const[y,m,d]=k.split('-').map(Number);return new Date(y,m-1,d)};
 let histRange=90;const histCache={};
 async function histFetch(days){
   const sy=S.sync,c=histCache[days];if(c&&c.ok===sy.ok_at&&c.url===sy.url&&Date.now()-c.at<300000)return c.h;
-  const r=await fetch(sy.url+'/api/history?device='+encodeURIComponent(sy.device)+'&days='+days,{cache:'no-store'});if(!r.ok)throw 0;
+  const r=await fetch('/api/history?days='+days,{cache:'no-store',headers:{'X-Tonepie-Lang':LANG}});if(!r.ok)throw 0;
   const h=await r.json();histCache[days]={h,at:Date.now(),ok:sy.ok_at,url:sy.url};return h;
 }
 function syncText(){const y=S.sync;return !y.enabled?t('syncOff'):y.error?t('syncErr',y.error):y.pending?t('syncPending'):y.ok_at?t('syncOk',ago(y.ok_at)):t('syncNever')}
@@ -428,7 +428,9 @@ async function drawHist(){
   const buckets=[];for(let d=bucketStart(first);d<=today;d=monthly?new Date(d.getFullYear(),d.getMonth()+1,1):new Date(d.getFullYear(),d.getMonth(),d.getDate()+7))buckets.push({start:d,v:{}});
   const find=d=>{const s=bucketStart(d).getTime();return buckets.find(b=>b.start.getTime()===s)};
   const totals={};for(const d of H.days){const b=find(parseDay(d.d));for(const[n,c]of Object.entries(d.v)){totals[n]=(totals[n]||0)+c;if(b)b.v[n]=(b.v[n]||0)+c}}
-  const chips=h('div',{class:'chips'},series.map(s=>h('div',{class:'chip',style:'--c:'+s.color},h('i'),h('div',{},h('b',{},String(totals[s.n]||0)),' ',s.label,h('br'),h('span',{},num((totals[s.n]||0)/span,1)+' '+t('perDay2'))))));
+  // Averages over the days actually covered: from the first visit on the server, not from the start of the range.
+  const firstData=parseDay(H.days[0].d),covered=Math.max(1,Math.round((today-(firstData>first?firstData:first))/864e5)+1);
+  const chips=h('div',{class:'chips'},series.map(s=>h('div',{class:'chip',style:'--c:'+s.color},h('i'),h('div',{},h('b',{},String(totals[s.n]||0)),' ',s.label,h('br'),h('span',{},num((totals[s.n]||0)/covered,1)+' '+t('perDay2'))))));
   // stacked bars
   const plot=h('div',{class:'plot'}),sel=h('div',{class:'hsel'});
   body.replaceChildren(chips,plot,sel);

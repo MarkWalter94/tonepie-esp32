@@ -53,6 +53,7 @@ Ai-Thinker ESP-C3-13-Kit (ESP32-C3 rev 0.3, CH340 on COM6), Tonepie Ti Pro 25 ma
 - Docker image built and run with Docker Desktop on the development PC; ingest, wrong key (401) and history checked with curl.
 - ESP updated over the air, sync enabled towards the container: first snapshot accepted within seconds (4 real visits of Ellie and Flipper, with weights). MCU still connected, no frame errors, 126 kB free heap.
 - History card and cat pop-up checked in a browser against a year of fake visits (`tools/demo_history.py`).
+- 1.9.1: browsers blocked the page's direct request to the server (`ERR_BLOCKED_BY_CLIENT`, local-network protection); the ESP now relays `/api/history` (0.15 s for the real data). First upload waits 10 s after Wi-Fi connects (the first attempt at boot was refused). Checked on the real page.
 - Not tried: HTTPS server, PostgreSQL/SQL Server, a long server outage (retry and backlog), the server on a NAS or Raspberry Pi.
 
 ## Not tested yet
