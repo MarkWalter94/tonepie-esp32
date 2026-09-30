@@ -101,13 +101,15 @@ void recordVisit(uint16_t weightG,uint16_t durationS) {
   Litter::add(history,v);bin.wasteG+=v.wasteG;bin.visits++;learnWeight(v.cat,weightG,v.epoch);
   logLine("Visita registrata: "+String(weightG)+" g, "+String(durationS)+" s, "+(v.cat<0?String("gatto non riconosciuto"):String(cats.cats[v.cat].name)));
 }
-// Community mapping, not verified on this unit: DP7 visit counter, DP8 duration (s),
-// DP6 weight in kg x10, DP134 weight in lb x10 (used only if DP6 never shows up).
+// Community mapping, not verified on this unit: DP7 visits (per day, resets), DP8 duration (s),
+// DP6 cat weight: grams on some Tonepie models (600-10000), kg x10 on others (6-300);
+// DP134 weight in lb x10 (used only if DP6 never shows up).
 void feedTracker(uint8_t id,uint32_t value) {
   uint32_t now=millis();
   if(id==7)tracker.onCount(value,now);
   else if(id==8 && value && value<=65535)tracker.onDuration(uint16_t(value),now);
   else if(id==6 && value>=5 && value<=300){kgSeen=true;tracker.onWeight(uint16_t(value*100),now);}
+  else if(id==6 && value>=500 && value<=30000){kgSeen=true;tracker.onWeight(uint16_t(value),now);}
   else if(id==134 && !kgSeen && value>=10 && value<=660)tracker.onWeight(uint16_t(value*4536/100),now);
 }
 void serviceTracker(uint32_t now) {
