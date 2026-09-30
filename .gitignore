@@ -1,0 +1,7 @@
+.pio/
+.vscode/
+*.local
+__pycache__/
+*.zip
+# Wi-Fi and update passwords
+include/secrets.h

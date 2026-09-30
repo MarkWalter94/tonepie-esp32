@@ -1,0 +1,214 @@
+{
+  "firmware": "1.1.0-uart6-7",
+  "mcu_rx": 6,
+  "mcu_tx": 7,
+  "ip": "192.168.178.94",
+  "online": true,
+  "ready": true,
+  "armed": false,
+  "pending": false,
+  "command": "Nessun comando inviato",
+  "frames": 51,
+  "bad_checksum": 0,
+  "bad_length": 0,
+  "timeouts": 0,
+  "bad_dp": 0,
+  "heap": 150356,
+  "dps": [
+    {
+      "id": 24,
+      "label": "Stato (indice da verificare)",
+      "type": "ENUM",
+      "value": "6",
+      "age_ms": 966
+    },
+    {
+      "id": 135,
+      "label": "Da verificare / sola lettura",
+      "type": "BOOL",
+      "value": "true",
+      "age_ms": 1010
+    },
+    {
+      "id": 129,
+      "label": "Da verificare / sola lettura",
+      "type": "BOOL",
+      "value": "true",
+      "age_ms": 1009
+    },
+    {
+      "id": 105,
+      "label": "Auto-clean",
+      "type": "BOOL",
+      "value": "true",
+      "age_ms": 1009
+    },
+    {
+      "id": 114,
+      "label": "Blocco bambini (da verificare)",
+      "type": "BOOL",
+      "value": "false",
+      "age_ms": 1008
+    },
+    {
+      "id": 117,
+      "label": "Attesa pulizia (min)",
+      "type": "VALUE",
+      "value": "0",
+      "age_ms": 1008
+    },
+    {
+      "id": 118,
+      "label": "Intervallo pulizia (min)",
+      "type": "VALUE",
+      "value": "0",
+      "age_ms": 1007
+    },
+    {
+      "id": 123,
+      "label": "Da verificare / sola lettura",
+      "type": "VALUE",
+      "value": "15",
+      "age_ms": 1004
+    },
+    {
+      "id": 125,
+      "label": "Da verificare / sola lettura",
+      "type": "BOOL",
+      "value": "false",
+      "age_ms": 1002
+    },
+    {
+      "id": 124,
+      "label": "Da verificare / sola lettura",
+      "type": "VALUE",
+      "value": "41",
+      "age_ms": 1002
+    },
+    {
+      "id": 7,
+      "label": "Da verificare / sola lettura",
+      "type": "VALUE",
+      "value": "10",
+      "age_ms": 998
+    },
+    {
+      "id": 116,
+      "label": "Da verificare / sola lettura",
+      "type": "ENUM",
+      "value": "0",
+      "age_ms": 998
+    },
+    {
+      "id": 131,
+      "label": "Da verificare / sola lettura",
+      "type": "ENUM",
+      "value": "1",
+      "age_ms": 997
+    },
+    {
+      "id": 127,
+      "label": "Da verificare / sola lettura",
+      "type": "BOOL",
+      "value": "false",
+      "age_ms": 997
+    },
+    {
+      "id": 128,
+      "label": "Da verificare / sola lettura",
+      "type": "BOOL",
+      "value": "false",
+      "age_ms": 996
+    },
+    {
+      "id": 101,
+      "label": "Pulizia manuale",
+      "type": "BOOL",
+      "value": "false",
+      "age_ms": 986
+    },
+    {
+      "id": 102,
+      "label": "Svuotamento",
+      "type": "BOOL",
+      "value": "false",
+      "age_ms": 986
+    },
+    {
+      "id": 22,
+      "label": "Fault (bit da verificare)",
+      "type": "BITMAP",
+      "value": "0",
+      "age_ms": 976
+    },
+    {
+      "id": 119,
+      "label": "Da verificare / sola lettura",
+      "type": "BOOL",
+      "value": "true",
+      "age_ms": 976
+    }
+  ],
+  "logs": [
+    "2234 ms | TX 55 AA 00 01 00 00 00 ",
+    "2235 ms | RX v03 cmd00 len1 01 ",
+    "2235 ms | RX v03 cmd07 len5 18 04 00 01 06 ",
+    "2244 ms | RX v03 cmd01 len51 7B 22 70 22 3A 22 79 6E 36 77 71 6D 69 7A 67 37 61 62 65 35 6B 38 22 2C 22 76 22 3A 22 31 2E 30 2E 31 35 22 2C 22 6D 22 3A 32 2C 22 6D 74 22 3A 31 30 7D ",
+    "2244 ms | TX 55 AA 00 02 00 00 01 ",
+    "2246 ms | RX v03 cmd02 len0 ",
+    "2247 ms | TX 55 AA 00 03 00 01 03 06 ",
+    "2249 ms | RX v03 cmd03 len0 ",
+    "2349 ms | TX 55 AA 00 08 00 00 07 ",
+    "2362 ms | RX v03 cmd07 len5 87 01 00 01 01 ",
+    "2363 ms | RX v03 cmd07 len5 81 01 00 01 01 ",
+    "2364 ms | RX v03 cmd07 len5 69 01 00 01 01 ",
+    "2364 ms | RX v03 cmd07 len5 72 01 00 01 00 ",
+    "2365 ms | RX v03 cmd07 len8 75 02 00 04 00 00 00 00 ",
+    "2365 ms | RX v03 cmd07 len8 76 02 00 04 00 00 00 00 ",
+    "2366 ms | RX v03 cmd07 len8 7B 02 00 04 00 00 00 0F ",
+    "2366 ms | RX v03 cmd07 len5 7D 01 00 01 00 ",
+    "2367 ms | RX v03 cmd07 len8 7C 02 00 04 00 00 00 29 ",
+    "2373 ms | RX v03 cmd07 len8 07 02 00 04 00 00 00 0A ",
+    "2374 ms | RX v03 cmd07 len5 74 04 00 01 00 ",
+    "2374 ms | RX v03 cmd07 len5 83 04 00 01 01 ",
+    "2375 ms | RX v03 cmd07 len5 7F 01 00 01 00 ",
+    "2376 ms | RX v03 cmd07 len5 80 01 00 01 00 ",
+    "2377 ms | RX v03 cmd07 len5 65 01 00 01 00 ",
+    "2386 ms | RX v03 cmd07 len5 66 01 00 01 00 ",
+    "2387 ms | RX v03 cmd07 len5 18 01 00 01 01 ",
+    "2387 ms | RX v03 cmd07 len5 16 05 00 01 00 ",
+    "2397 ms | RX v03 cmd07 len5 77 01 00 01 01 ",
+    "2397 ms | RX v03 cmd07 len5 18 04 00 01 06 ",
+    "6302 ms | TX 55 AA 00 00 00 00 FF ",
+    "6305 ms | RX v03 cmd00 len1 01 ",
+    "11303 ms | TX 55 AA 00 00 00 00 FF ",
+    "11305 ms | RX v03 cmd00 len1 01 ",
+    "16303 ms | TX 55 AA 00 00 00 00 FF ",
+    "16306 ms | RX v03 cmd00 len1 01 ",
+    "21310 ms | TX 55 AA 00 00 00 00 FF ",
+    "21332 ms | RX v03 cmd00 len1 01 ",
+    "26278 ms | TX 55 AA 00 08 00 00 07 ",
+    "26291 ms | RX v03 cmd07 len5 87 01 00 01 01 ",
+    "26292 ms | RX v03 cmd07 len5 81 01 00 01 01 ",
+    "26292 ms | RX v03 cmd07 len5 69 01 00 01 01 ",
+    "26293 ms | RX v03 cmd07 len5 72 01 00 01 00 ",
+    "26293 ms | RX v03 cmd07 len8 75 02 00 04 00 00 00 00 ",
+    "26294 ms | RX v03 cmd07 len8 76 02 00 04 00 00 00 00 ",
+    "26296 ms | RX v03 cmd07 len8 7B 02 00 04 00 00 00 0F ",
+    "26299 ms | RX v03 cmd07 len5 7D 01 00 01 00 ",
+    "26299 ms | RX v03 cmd07 len8 7C 02 00 04 00 00 00 29 ",
+    "26302 ms | RX v03 cmd07 len8 07 02 00 04 00 00 00 0A ",
+    "26303 ms | RX v03 cmd07 len5 74 04 00 01 00 ",
+    "26303 ms | RX v03 cmd07 len5 83 04 00 01 01 ",
+    "26304 ms | RX v03 cmd07 len5 7F 01 00 01 00 ",
+    "26305 ms | RX v03 cmd07 len5 80 01 00 01 00 ",
+    "26305 ms | RX v03 cmd07 len5 65 01 00 01 00 ",
+    "26315 ms | RX v03 cmd07 len5 66 01 00 01 00 ",
+    "26316 ms | RX v03 cmd07 len5 18 01 00 01 01 ",
+    "26316 ms | RX v03 cmd07 len5 16 05 00 01 00 ",
+    "26325 ms | RX v03 cmd07 len5 77 01 00 01 01 ",
+    "26326 ms | RX v03 cmd07 len5 18 04 00 01 06 ",
+    "26335 ms | TX 55 AA 00 00 00 00 FF ",
+    "26337 ms | RX v03 cmd00 len1 01 "
+  ]
+}

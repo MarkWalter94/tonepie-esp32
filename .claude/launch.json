@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "anteprima-home",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["tools/preview.py", "8765"],
+      "port": 8765
+    }
+  ]
+}
