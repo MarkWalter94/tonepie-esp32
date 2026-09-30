@@ -13,4 +13,10 @@ services:
       # Tonepie__Provider: Postgres
       # ConnectionStrings__Tonepie: Host=db;Database=tonepie;Username=tonepie;Password=...
     volumes:
-      - ./data:/data
+      # A named volume, not ./data: Docker creates it owned by the image's non-root user, while a
+      # bind-mounted host folder is root-owned on Linux and the server could not write to it.
+      - tonepie-data:/data
+
+volumes:
+  tonepie-data:
+    name: tonepie-data

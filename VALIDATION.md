@@ -56,6 +56,13 @@ Ai-Thinker ESP-C3-13-Kit (ESP32-C3 rev 0.3, CH340 on COM6), Tonepie Ti Pro 25 ma
 - 1.9.1: browsers blocked the page's direct request to the server (`ERR_BLOCKED_BY_CLIENT`, local-network protection); the ESP now relays `/api/history` (0.15 s for the real data). First upload waits 10 s after Wi-Fi connects (the first attempt at boot was refused). Checked on the real page.
 - Not tried: HTTPS server, PostgreSQL/SQL Server, a long server outage (retry and backlog), the server on a NAS or Raspberry Pi.
 
+### 1.10.0 — fixes from a full code review
+
+- Commands from the home page: after a network error a command is never sent again (only a "wait" answer, 429, is retried), and one sequence runs at a time with the buttons disabled. Checked in the preview by making the command request fail: one attempt, "result unknown" message.
+- Visit detection: a counter that goes down (midnight) counts today's visits instead of none; a counter saved on another day restarts from 0; the counter is saved only once its visits are recorded; after a restart the last visit is restored so its late signals patch it; patches target the tracker's own visit by id and a repeated weight is not learned twice; values from query responses are not given to later visits; old timestamps expire before `millis()` wraps. 9 new host tests, all passing.
+- Firmware: key kept only for the same server address; history relay with the key, short timeouts and an 8 s deadline; deletions and a send "generation" kept consistent across restarts and setting changes; network state to the MCU retried 3 times then once a minute; DP126 no longer reported as "result unknown"; weight chart on local days; smaller JSON buffers. Updated over the air: MCU handshake clean (0 frame errors), one network-state frame at boot, sync working.
+- Server: 20 tests (concurrency, nulls, id wrap and restart, DST with a fake clock, read authentication, body limit, pending model changes for all three providers). Named Docker volume (the old `./data` file was copied into it: no data lost), health check, no CORS, key required for reads.
+
 ## Not tested yet
 
 - Any physical command from this firmware: clean (101), empty (102), level litter (126), bag change (127), and the writes to 105/117/118/129.

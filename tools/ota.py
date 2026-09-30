@@ -33,7 +33,14 @@ def main():
     password = re.search(r'OTA_PASSWORD\[\]\s*=\s*"([^"]+)"', config).group(1)
     data = image.read_bytes()
 
-    state = get_state(base)
+    try:
+        state = get_state(base)
+    except urllib.error.HTTPError as error:
+        print(f"{base} answered HTTP {error.code}: use the IP address or tonepie.local (other host names are refused).")
+        return 1
+    except (OSError, ValueError) as error:
+        print(f"Cannot reach {base}: {error}")
+        return 1
     print(f"Running version: {state['firmware']} - sending {image.name} ({len(data)} bytes)")
     boundary = uuid.uuid4().hex
     body = (f"--{boundary}\r\nContent-Disposition: form-data; name=\"firmware\"; filename=\"firmware.bin\"\r\n"
@@ -45,8 +52,15 @@ def main():
         with OPENER.open(request, timeout=120) as response:
             print(json.load(response).get("message", ""))
     except urllib.error.HTTPError as error:
-        print("Rejected:", json.load(error).get("message", error.reason))
+        try:
+            message = json.load(error).get("message", error.reason)
+        except ValueError:
+            message = error.reason
+        print("Rejected:", message)
         return 1
+    except (OSError, ValueError) as error:
+        # The module may have received everything and restarted before answering: check below.
+        print(f"No answer to the upload ({error}); checking whether the module restarted...")
 
     for _ in range(20):  # the module restarts on the new firmware
         time.sleep(2)

@@ -202,13 +202,13 @@ details{margin-top:14px}summary{cursor:pointer;font-weight:700;color:var(--muted
     <div class="opt"><label for="mOdor"><span data-t="odor"></span><small data-t="odorSub"></small></label><input class="switch" type="checkbox" id="mOdor"></div>
   <h3 class="sub" data-t="serverTitle"></h3><p class="muted small" data-t="serverText"></p>
     <div class="opt"><label for="sOn"><span data-t="serverOn"></span><small id="sStatus"></small></label><input class="switch" type="checkbox" id="sOn"></div>
-    <div class="field wide-field"><input id="sUrl" type="url" placeholder="http://192.168.178.10:8090" autocomplete="off" spellcheck="false" maxlength="120"></div>
-    <div class="field wide-field"><input id="sKey" type="password" autocomplete="new-password" maxlength="64"></div>
+    <div class="field wide-field"><input id="sUrl" type="url" placeholder="http://192.168.178.10:8090" autocomplete="off" spellcheck="false" maxlength="120" data-t-aria="serverUrl"></div>
+    <div class="field wide-field"><input id="sKey" type="password" autocomplete="new-password" maxlength="64" data-t-aria="keyNew"></div>
   <details><summary data-t="binDetails"></summary>
     <div class="opt"><label for="optLimit"><span data-t="limit"></span><small data-t="limitSub"></small></label><div class="field"><input id="optLimit" type="number" min="5" max="500" step="1" inputmode="numeric" required><span data-t="visitsUnit"></span></div></div>
     <div class="opt"><label for="optTol"><span data-t="tol"></span><small data-t="tolSub"></small></label><div class="field"><input id="optTol" type="number" min="0.1" max="3" step="0.1" required><span>kg</span></div></div>
   </details>
-  <div class="actions"><button type="button" class="btn ghost" data-close data-t="cancel"></button><button class="btn primary" value="save" data-t="save"></button></div>
+  <div class="actions"><button type="button" class="btn ghost" data-close data-t="cancel"></button><button class="btn primary" value="save" id="saveBtn" data-t="save"></button></div>
 </form></dialog>
 <dialog id="dlgVisit"><div class="sheet"><h2 data-t="whoWas"></h2><p id="visitInfo"></p><div class="choices" id="visitChoices"></div>
   <div class="actions"><button class="btn ghost" data-close data-t="close"></button></div></div></dialog>
@@ -238,7 +238,7 @@ it:{title:'Lettiera',settings:'Impostazioni',binTitle:'CASSETTO',trend:'Andament
   tapFix:'tocca per correggere',visitsEmpty:'Qui compariranno le visite dei tuoi gatti.',notRecognised:'Non riconosciuto',noData:'nessun dato',showLess:'Mostra meno',showAll:n=>'Mostra tutte ('+n+')',
   justNow:'proprio adesso',bagWhen:a=>'ultimo '+a,litterWhen:a=>'ultima '+a,bagNever:'mai registrato',litterNever:'mai registrata',devPage:'Pagina sviluppatore',
   now:'adesso',minAgo:n=>n+' min fa',hAgo:n=>n+' h fa',yesterday:'ieri',daysAgo:n=>n+' giorni fa',Today:'Oggi',Yesterday:'Ieri',noTime:'Orario non disponibile',
-  inDays:(d,n)=>' · '+d+' in '+n+' giorni',noWeight:'nessun dato',trendEmpty:'Il grafico comparirà dopo le prime visite riconosciute.',today:'oggi',chart:'Andamento del peso dei gatti in chilogrammi',day:'Giorno',
+  inDays:(d,n)=>' · '+d+' in '+plural(n,'giorno','giorni'),noWeight:'nessun dato',trendEmpty:'Il grafico comparirà dopo le prime visite riconosciute.',today:'oggi',chart:'Andamento del peso dei gatti in chilogrammi',day:'Giorno',
   visitNoData:'Visita senza dati',dontKnow:'Non lo so',deleteVisit:'Non era una visita: elimina',name:'Nome',colour:n=>'Colore '+n,remove:'Rimuovi',
   sending:'Invio le impostazioni alla lettiera…',confirmed:'La lettiera ha confermato le nuove impostazioni',notConfirmed:'La lettiera non ha confermato: riapri le impostazioni per controllare',
   drum:' Il tamburo potrebbe muoversi: controlla che nessun gatto sia dentro.',notReady:' La lettiera non è pronta, quindi per ora lo registro soltanto.',refused:m=>'Registrato, ma la lettiera ha rifiutato: '+m,
@@ -252,8 +252,9 @@ it:{title:'Lettiera',settings:'Impostazioni',binTitle:'CASSETTO',trend:'Andament
   serverOn:'Invia i dati al server',keyKeep:'Chiave API (vuoto = invariata)',keyNew:'Chiave API del server',
   syncOk:a=>'Ultimo invio '+a,syncPending:'Invio in corso…',syncErr:e=>'Errore: '+e,syncOff:'Disattivato',syncNever:'Nessun invio ancora',
   histLoading:'Carico lo storico…',histError:u=>'Server storico non raggiungibile ('+u+'). Controlla che sia acceso.',histEmpty:'Sul server non ci sono ancora visite.',
-  perDay2:'al giorno',weekOf:d=>'Settimana del '+d,bagsLine:(n,d,v)=>plural(n,'cambio sacchetto','cambi sacchetto')+(d?' · in media ogni '+d+' giorni':'')+(v?' · circa '+plural(v,'visita','visite')+' per sacchetto':''),
-  months:'Per mese',month:'Mese',fromServer:'Include i dati del server storico.',srvWait:'Server storico non raggiungibile: per ora vedi solo i dati della lettiera.',unknownCats:'Non riconosciuti',
+  perDay2:'al giorno',weekOf:d=>'Settimana del '+d,bagsLine:(n,d,v)=>plural(n,'cambio sacchetto','cambi sacchetto')+(d?' · in media '+(d===1?'ogni giorno':'ogni '+d+' giorni'):'')+(v?' · circa '+plural(v,'visita','visite')+' per sacchetto':''),
+  months:'Per mese',month:'Mese',fromServer:'Include i dati del server storico.',serverUrl:'Indirizzo del server storico',
+  waitSeq:'Attendi: sto già inviando comandi alla lettiera',unknownOutcome:'Collegamento perso: esito sconosciuto. Controlla la lettiera prima di riprovare.',srvWait:'Server storico non raggiungibile: per ora vedi solo i dati della lettiera.',unknownCats:'Non riconosciuti',
   letters:['D','L','M','M','G','V','S'],locale:'it-IT',other:'EN',otherName:'Switch to English'},
 en:{title:'Litter box',settings:'Settings',binTitle:'BIN',trend:'Weight trend',period:'Period',d30:'30 d',d90:'90 d',showValues:'Show values',recent:'Recent visits',
   cleanNow:'Clean now',cleanSub:'start a cycle',bag:'Bag change',litter:'Litter added',
@@ -271,7 +272,7 @@ en:{title:'Litter box',settings:'Settings',binTitle:'BIN',trend:'Weight trend',p
   tapFix:'tap to correct',visitsEmpty:'Your cats’ visits will show up here.',notRecognised:'Not recognised',noData:'no data',showLess:'Show less',showAll:n=>'Show all ('+n+')',
   justNow:'just now',bagWhen:a=>'last '+a,litterWhen:a=>'last '+a,bagNever:'never recorded',litterNever:'never recorded',devPage:'Developer page',
   now:'just now',minAgo:n=>n+' min ago',hAgo:n=>n+' h ago',yesterday:'yesterday',daysAgo:n=>n+' days ago',Today:'Today',Yesterday:'Yesterday',noTime:'Time not available',
-  inDays:(d,n)=>' · '+d+' in '+n+' days',noWeight:'no data',trendEmpty:'The chart will appear after the first recognised visits.',today:'today',chart:'Cats’ weight trend in kilograms',day:'Day',
+  inDays:(d,n)=>' · '+d+' in '+plural(n,'day','days'),noWeight:'no data',trendEmpty:'The chart will appear after the first recognised visits.',today:'today',chart:'Cats’ weight trend in kilograms',day:'Day',
   visitNoData:'Visit without data',dontKnow:'I don’t know',deleteVisit:'Not a visit: delete',name:'Name',colour:n=>'Colour '+n,remove:'Remove',
   sending:'Sending the settings to the litter box…',confirmed:'The litter box confirmed the new settings',notConfirmed:'The litter box did not confirm: reopen the settings to check',
   drum:' The drum may move: make sure no cat is inside.',notReady:' The litter box is not ready, so for now I only record it.',refused:m=>'Recorded, but the litter box refused: '+m,
@@ -285,8 +286,9 @@ en:{title:'Litter box',settings:'Settings',binTitle:'BIN',trend:'Weight trend',p
   serverOn:'Send data to the server',keyKeep:'API key (empty = unchanged)',keyNew:'Server API key',
   syncOk:a=>'Last sent '+a,syncPending:'Sending…',syncErr:e=>'Error: '+e,syncOff:'Off',syncNever:'Nothing sent yet',
   histLoading:'Loading history…',histError:u=>'History server unreachable ('+u+'). Check that it is running.',histEmpty:'No visits on the server yet.',
-  perDay2:'per day',weekOf:d=>'Week of '+d,bagsLine:(n,d,v)=>plural(n,'bag change','bag changes')+(d?' · every '+d+' days on average':'')+(v?' · about '+plural(v,'visit','visits')+' per bag':''),
-  months:'By month',month:'Month',fromServer:'Includes data from the history server.',srvWait:'History server unreachable: showing only the litter box’s own data for now.',unknownCats:'Not recognised',
+  perDay2:'per day',weekOf:d=>'Week of '+d,bagsLine:(n,d,v)=>plural(n,'bag change','bag changes')+(d?' · '+(d===1?'every day':'every '+d+' days')+' on average':'')+(v?' · about '+plural(v,'visit','visits')+' per bag':''),
+  months:'By month',month:'Month',fromServer:'Includes data from the history server.',serverUrl:'History server address',
+  waitSeq:'Please wait: commands are already being sent to the litter box',unknownOutcome:'Connection lost: result unknown. Check the litter box before trying again.',srvWait:'History server unreachable: showing only the litter box’s own data for now.',unknownCats:'Not recognised',
   letters:['S','M','T','W','T','F','S'],locale:'en-GB',other:'IT',otherName:'Passa all’italiano'}};
 let LANG=(()=>{try{const l=localStorage.getItem('lang');if(TEXT[l])return l}catch(e){}return /^it\b/i.test(navigator.language||'')?'it':'en'})();
 function t(k,...a){const v=TEXT[LANG][k];return typeof v==='function'?v(...a):v}
@@ -302,7 +304,7 @@ const PALETTE={light:['#ef8a4a','#8a97ad','#4a4653','#d8ae78','#a56b46','#79a98c
 let COLORS=PALETTE[darkQuery.matches?'dark':'light'];
 darkQuery.addEventListener('change',e=>{COLORS=PALETTE[e.matches?'dark':'light'];if(S)render()});
 const CAT='<svg viewBox="0 0 48 48" fill="currentColor"><path d="M7 8c0-1.300 1.500-2 2.500-1.200L18 13.500c1.900-.6 3.900-.9 6-.9s4.100.3 6 .9l8.500-6.700C39.500 6 41 6.700 41 8v17c0 9.400-7.600 16-17 16S7 34.400 7 25z"/><circle cx="17.500" cy="25" r="2.400" fill="var(--card)"/><circle cx="30.500" cy="25" r="2.400" fill="var(--card)"/><path d="M21.600 30.500h4.800L24 33.200z" fill="var(--card)"/></svg>';
-let S=null,token='',lastKey='',draft=null,busy=false,showAll=false,range=30;
+let S=null,token='',lastKey='',draft=null,busy=false,showAll=false,range=30,settingsBase={};
 function h(tag,attrs,...kids){const e=document.createElement(tag);for(const[k,v]of Object.entries(attrs||{})){if(v==null||v===false)continue;if(k==='class')e.className=v;else if(k==='html')e.innerHTML=v;else if(k.startsWith('on'))e[k]=v;else if(k==='style')e.style.cssText=v;else e.setAttribute(k,v)}for(const k of kids.flat())if(k!=null)e.append(k);return e}
 const avatar=(color,cls)=>color==null?h('div',{class:'avatar q '+(cls||'')},'?'):h('div',{class:'avatar '+(cls||''),style:'--c:'+COLORS[color%6],html:CAT});
 const num=(v,d)=>v.toLocaleString(t('locale'),{minimumFractionDigits:d,maximumFractionDigits:d});
@@ -318,16 +320,27 @@ const dur=s=>s<60?s+' s':Math.floor(s/60)+' min'+(s%60?' '+s%60+' s':'');
 function toast(m){if(!m)return;const e=$('toast');e.textContent=m;e.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.remove('on'),3200)}
 async function api(path,data,json){const o={method:'POST',headers:{'X-Tonepie-Token':token,'X-Tonepie-Lang':LANG}};
   if(json){o.headers['Content-Type']='application/json';o.body=JSON.stringify(data)}else o.body=new URLSearchParams(data||{});
-  try{const r=await fetch(path,o);const j=await r.json().catch(()=>({}));return{ok:r.ok,message:j.message||''}}catch(e){return{ok:false,message:t('unreachableApi')}}}
+  try{const r=await fetch(path,o);const j=await r.json().catch(()=>({}));return{ok:r.ok,status:r.status,message:j.message||''}}catch(e){return{ok:false,status:0,message:t('unreachableApi')}}}
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-// The firmware accepts writes only on fresh data and inside an enabled session, one at a time.
+// Buttons and Save are disabled while anything is being sent.
+function setBusy(on){busy=on;$('saveBtn').disabled=on;if(S)render()}
+// The firmware accepts writes only on fresh data and inside an enabled session, one at a time. One sequence
+// at a time here too, and only a "wait" answer (429) is retried: after a network error the command may have
+// reached the litter box, and a movement must never be sent twice.
+let mcuLock=false;
 async function mcuWrites(list){
-  await api('/api/query');await sleep(1200);
-  let r=await api('/api/arm',{enabled:1});if(!r.ok)return r;
-  for(const[i,w]of list.entries()){if(i)await sleep(2600);r=await api(w.path,w.data);
-    if(!r.ok){await sleep(3200);r=await api(w.path,w.data)} // previous write still waiting for its report
-    if(!r.ok)break}
-  await api('/api/arm',{enabled:0});return r;
+  if(mcuLock)return{ok:false,message:t('waitSeq')};
+  mcuLock=true;
+  try{
+    const wasArmed=!!(S&&S.mcu.armed); // a session opened from /dev stays open
+    await api('/api/query');await sleep(1200);
+    let r=wasArmed?{ok:true}:await api('/api/arm',{enabled:1});if(!r.ok)return r;
+    for(const[i,w]of list.entries()){if(i)await sleep(2600);r=await api(w.path,w.data);
+      if(r.status===429){await sleep(3200);r=await api(w.path,w.data)}
+      if(!r.ok){if(!r.status)r.message=t('unknownOutcome');break}}
+    if(!wasArmed)await api('/api/arm',{enabled:0});
+    return r;
+  }finally{mcuLock=false}
 }
 function confirmBox(title,text,ok){return new Promise(res=>{$('cfTitle').textContent=title;$('cfText').textContent=text;$('cfOk').textContent=ok;const d=$('dlgConfirm');$('cfOk').onclick=()=>{res(true);d.close()};d.onclose=()=>res(false);d.showModal()})}
 document.querySelectorAll('dialog').forEach(d=>{d.addEventListener('click',e=>{if(e.target===d||e.target.closest('[data-close]'))d.close()})});
@@ -368,7 +381,7 @@ function render(){
       h('div',{class:'who'},h('b',{},c?c.name:t('notRecognised')),h('span',{},[v.g?kg(v.g):null,v.s?dur(v.s):null].filter(Boolean).join(' · ')||t('noData'))),
       v.t?h('time',{},clock(v.t)):null))}
   if(vis.length>10)list.append(h('button',{class:'btn ghost block',style:'padding:10px',onclick:()=>{showAll=!showAll;render()}},showAll?t('showLess'):t('showAll',vis.length)));
-  $('cleanWrap').hidden=false;$('bag').disabled=$('litter').disabled=busy;
+  $('cleanWrap').hidden=false;$('bag').disabled=$('litter').disabled=busy;$('saveBtn').disabled=busy;
   const when=(s,key,never)=>!s?t(never):ago(s)===t('now')?t('justNow'):t(key,ago(s));
   $('bagSub').textContent=when(S.bin.since,'bagWhen','bagNever');$('litterSub').textContent=when(S.litter_at,'litterWhen','litterNever');
   $('clean').disabled=busy||!m.ready||!!m.presence||!!m.fault||!!m.lock||m.pending;
@@ -401,18 +414,31 @@ function openCat(i){
 const syncOn=()=>!!(S&&S.sync&&S.sync.enabled&&S.sync.url);
 const dateKey=s=>{const d=new Date(s*1000);return d.getFullYear()+'-'+two(d.getMonth()+1)+'-'+two(d.getDate())};
 const parseDay=k=>{const[y,m,d]=k.split('-').map(Number);return new Date(y,m-1,d)};
-let histRange=90;const histCache={};
-async function histFetch(days){
-  const sy=S.sync,c=histCache[days];if(c&&c.ok===sy.ok_at&&c.url===sy.url&&Date.now()-c.at<300000)return c.h;
-  const r=await fetch('/api/history?days='+days,{cache:'no-store',headers:{'X-Tonepie-Lang':LANG}});if(!r.ok)throw 0;
-  const h=await r.json();histCache[days]={h,at:Date.now(),ok:sy.ok_at,url:sy.url};return h;
+let histRange=90,histOpen=false,histSel=null;const histCache={},histFail={},histBusy={};
+// Every request holds up the ESP while it asks the server: a failure is not retried for 90 s.
+function histFetch(days){
+  const sy=S.sync,c=histCache[days];if(c&&c.ok===sy.ok_at&&c.url===sy.url&&Date.now()-c.at<300000)return Promise.resolve(c.h);
+  const f=histFail[days];if(f&&f.url===sy.url&&Date.now()-f.at<90000)return Promise.reject(0);
+  return histBusy[days]||(histBusy[days]=(async()=>{
+    try{
+      const r=await fetch('/api/history?days='+days,{cache:'no-store',headers:{'X-Tonepie-Lang':LANG}});
+      const h=r.status===404?{days:[],bags:[],litter:[],cats:[],firstVisit:0}:r.ok?await r.json():null; // 404: nothing sent yet
+      if(!h)throw 0;
+      histCache[days]={h,at:Date.now(),ok:sy.ok_at,url:sy.url};delete histFail[days];return h;
+    }catch(e){histFail[days]={at:Date.now(),url:sy.url};throw e}
+    finally{delete histBusy[days]}
+  })());
 }
 function syncText(){const y=S.sync;return !y.enabled?t('syncOff'):y.error?t('syncErr',y.error):y.pending?t('syncPending'):y.ok_at?t('syncOk',ago(y.ok_at)):t('syncNever')}
 async function drawHist(){
-  const card=$('hist'),body=$('histBody');card.hidden=!syncOn();if(card.hidden)return;
-  const days=histRange;if(!histCache[days])body.replaceChildren(h('p',{class:'empty'},t('histLoading')));
-  let H;try{H=await histFetch(days)}catch(e){body.replaceChildren(h('p',{class:'empty'},t('histError',S.sync.url)),h('p',{class:'muted small'},syncText()));return}
+  const card=$('hist'),body=$('histBody');card.hidden=!syncOn();if(card.hidden){drawHist.sig='';return}
+  const days=histRange;if(!histCache[days]&&!histFail[days])body.replaceChildren(h('p',{class:'empty'},t('histLoading')));
+  let H;try{H=await histFetch(days)}catch(e){
+    const sig='err|'+LANG+'|'+syncText();if(drawHist.sig!==sig){drawHist.sig=sig;body.replaceChildren(h('p',{class:'empty'},t('histError',S.sync.url)),h('p',{class:'muted small'},syncText()))}return}
   if(days!==histRange)return;
+  // Redrawn only when something shown changes, so an open table or a selected bar survive the 5 s refresh.
+  const sig=[histCache[days].at,days,$('histBody').clientWidth,LANG,COLORS[0],JSON.stringify(S.config.cats.map(c=>[c.name,c.color])),syncText()].join('|');
+  if(drawHist.sig===sig)return;drawHist.sig=sig;
   // Series: current cats first (their colours), then cats removed since, then unrecognised visits.
   const cats=S.config.cats,names=cats.map(c=>c.name);
   for(const d of H.days)for(const n of Object.keys(d.v))if(n&&!names.includes(n))names.push(n);
@@ -444,11 +470,12 @@ async function drawHist(){
   const lab=[0,Math.floor(n/2),n-1].filter((v,i,a)=>a.indexOf(v)===i);
   for(const i of lab)g+=`<text x="${(L+(i+.5)*bw).toFixed(1)}" y="${Hh-5}" text-anchor="${i===0?'start':i===n-1?'end':'middle'}">${fmt(buckets[i].start)}</text>`;
   plot.innerHTML=`<svg width="${W}" height="${Hh}" viewBox="0 0 ${W} ${Hh}" role="img" aria-label="${t('histTitle')}">${g}</svg>`;
-  const show=i=>{const b=buckets[i];plot.querySelectorAll('rect').forEach(r=>r.classList.toggle('sel',+r.dataset.i!==i));
+  const show=i=>{const b=buckets[i];histSel=i;plot.querySelectorAll('rect').forEach(r=>r.classList.toggle('sel',+r.dataset.i!==i));
     sel.replaceChildren(h('b',{},monthly?b.start.toLocaleDateString(t('locale'),{month:'long',year:'numeric'}):t('weekOf',fmt(b.start))),
       ...series.filter(s=>b.v[s.n]).map(s=>h('span',{},h('i',{style:'--c:'+s.color}),s.label+' '+b.v[s.n])))};
   plot.onpointermove=plot.onpointerdown=e=>{const i=Math.floor((e.clientX-plot.getBoundingClientRect().left-L)/bw);if(i>=0&&i<n)show(i)};
-  plot.onpointerleave=()=>{plot.querySelectorAll('rect').forEach(r=>r.classList.remove('sel'));sel.replaceChildren()};
+  plot.onpointerleave=e=>{if(e.pointerType!=='mouse')return;histSel=null;plot.querySelectorAll('rect').forEach(r=>r.classList.remove('sel'));sel.replaceChildren()};
+  if(histSel!=null&&histSel<n)show(histSel);
   // bag changes: interval and visits per bag
   const bags=H.bags.filter(b=>b>=first.getTime()/1000);
   if(bags.length){const gaps=bags.slice(1).map((b,i)=>(b-bags[i])/86400),per=bags.slice(1).map((b,i)=>H.days.filter(d=>{const s=parseDay(d.d).getTime()/1000;return s>=bags[i]-86399&&s<b-86399}).reduce((a,d)=>a+Object.values(d.v).reduce((x,y)=>x+y,0),0));
@@ -457,17 +484,19 @@ async function drawHist(){
   const months={};for(const d of H.days){const m=d.d.slice(0,7),row=months[m]||(months[m]={v:{},w:{},wn:{}});
     for(const[k,c]of Object.entries(d.v))row.v[k]=(row.v[k]||0)+c;for(const[k,g]of Object.entries(d.w)){const c=d.v[k]||1;row.w[k]=(row.w[k]||0)+g*c;row.wn[k]=(row.wn[k]||0)+c}}
   const named=series.filter(s=>s.n);
-  body.append(h('details',{},h('summary',{},t('months')),h('table',{},h('tr',{},h('th',{},t('month')),named.map(s=>h('th',{},s.label))),
+  body.append(h('details',{open:histOpen||null,ontoggle:e=>histOpen=e.target.open},h('summary',{},t('months')),h('table',{},h('tr',{},h('th',{},t('month')),named.map(s=>h('th',{},s.label))),
     Object.keys(months).sort().reverse().map(m=>h('tr',{},h('td',{},parseDay(m+'-01').toLocaleDateString(t('locale'),{month:'short',year:'numeric'})),
       named.map(s=>{const r=months[m],c=r.v[s.n]||0;return h('td',{},c?c+(r.wn[s.n]?' · '+num(r.w[s.n]/r.wn[s.n]/1000,1)+' kg':''):'—')}))))),
     h('p',{class:'muted small',style:'margin-top:8px'},syncText()));
 }
-document.querySelectorAll('[data-hist]').forEach(b=>b.onclick=()=>{histRange=+b.dataset.hist;document.querySelectorAll('[data-hist]').forEach(o=>o.setAttribute('aria-pressed',String(o===b)));drawHist()});
-const dayText=d=>new Date(d*864e5).toLocaleDateString(t('locale'),{day:'numeric',month:'short'});
+document.querySelectorAll('[data-hist]').forEach(b=>b.onclick=()=>{histRange=+b.dataset.hist;histSel=null;document.querySelectorAll('[data-hist]').forEach(o=>o.setAttribute('aria-pressed',String(o===b)));drawHist()});
+// Weight log days are local days numbered like epoch days: shown with timeZone UTC so no shift is applied twice.
+const dayText=d=>new Date(d*864e5).toLocaleDateString(t('locale'),{day:'numeric',month:'short',timeZone:'UTC'});
+const localToday=()=>Math.floor((Date.now()-new Date().getTimezoneOffset()*6e4)/864e5);
 const signed=v=>(v>0?'+':v<0?'−':'')+num(Math.abs(v),1)+' kg';
 function drawTrend(){
   const cats=S.config.cats,card=$('trend');card.hidden=!cats.length;if(!cats.length)return;
-  const today=Math.floor(Date.now()/864e5),from=today-range+1;
+  const today=localToday(),from=today-range+1;
   const series=cats.map(c=>({name:c.name,color:COLORS[c.color%6],pts:(c.days||[]).map((d,k)=>[d,c.grams[k]/1000]).filter(p=>p[0]>=from&&p[0]<=today)}));
   $('legend').replaceChildren(...series.map(s=>{const a=s.pts[0],b=s.pts[s.pts.length-1];
     return h('div',{style:'--c:'+s.color},h('i'),s.name,h('span',{},b?num(b[1],1)+' kg'+(s.pts.length>1?t('inDays',signed(b[1]-a[1]),b[0]-a[0]):''):t('noWeight')))}));
@@ -503,10 +532,10 @@ function drawTrend(){
     daysWithData.slice().reverse().map(d=>h('tr',{},h('td',{},dayText(d)),series.map(s=>{const p=s.pts.find(p=>p[0]===d);return h('td',{},p?num(p[1],1)+' kg':'—')})))));
 }
 document.querySelectorAll('[data-range]').forEach(b=>b.onclick=()=>{range=+b.dataset.range;document.querySelectorAll('[data-range]').forEach(o=>o.setAttribute('aria-pressed',String(o===b)));drawTrend()});
-addEventListener('resize',()=>{if(S){drawTrend();drawHist()}});
+let resizeTimer;addEventListener('resize',()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(()=>{if(S){drawTrend();drawHist()}},200)});
 async function refresh(){
-  try{const r=await fetch('/api/home',{cache:'no-store'});if(!r.ok)throw 0;const s=await r.json();token=s.token;S=s;
-    const key=JSON.stringify([s.mcu,s.config,s.bin,s.visits,Math.floor(Date.now()/60000)]);if(key!==lastKey){lastKey=key;render()}}
+  try{const r=await fetch('/api/home',{cache:'no-store',headers:{'X-Tonepie-Lang':LANG}});if(!r.ok)throw 0;const s=await r.json();token=s.token;S=s;
+    const key=JSON.stringify([s.mcu,s.config,s.bin,s.visits,s.sync,s.litter_at,Math.floor(Date.now()/60000)]);if(key!==lastKey){lastKey=key;render()}}
   catch(e){lastKey='';setStatus('',t('unreachable'));$('clean').disabled=true}
 }
 function openVisit(v){
@@ -537,43 +566,53 @@ function openSettings(){
   $('mAuto').checked=!!m.auto;$('mAuto').disabled=!on||m.auto==null;
   $('mWait').value=m.wait_min??'';$('mWait').disabled=!on||m.wait_min==null;
   $('mOdor').checked=!!m.odor;$('mOdor').disabled=!on||m.odor==null;
+  settingsBase={auto:!!m.auto,wait:m.wait_min,odor:!!m.odor}; // what the user saw: only their own changes are sent
   const y=S.sync||{};$('sOn').checked=!!y.enabled;$('sUrl').value=y.url||'';$('sKey').value='';$('sKey').placeholder=t(y.key_set?'keyKeep':'keyNew');$('sStatus').textContent=syncText();
   drawEditors();$('dlgSettings').showModal();
 }
 $('gear').onclick=openSettings;
 $('addCat').onclick=()=>{draft.cats.push({name:'',kg:'',color:draft.cats.length%6});drawEditors()};
-$('formSettings').onsubmit=async e=>{e.preventDefault();
-  const r=await api('/api/config',{cats:draft.cats.map(c=>({name:c.name.trim(),weight_g:c.kg===c.shown?c.grams:Math.round(parseFloat(c.kg)*1000),color:c.color,from:c.from??-1})),
-    bin_limit_visits:+$('optLimit').value,tolerance_g:Math.round(parseFloat($('optTol').value)*1000)},true);
-  toast(r.message);if(!r.ok)return;
-  // Settings kept by the litter box itself: send only what changed.
-  const m=S.mcu,w=[],auto=$('mAuto'),wait=$('mWait'),odor=$('mOdor');
-  if(!auto.disabled&&auto.checked!==!!m.auto)w.push({path:'/api/command',data:{action:auto.checked?'auto_on':'auto_off'}});
-  if(!wait.disabled&&wait.value!==''&&+wait.value!==m.wait_min)w.push({path:'/api/value',data:{dp:117,value:+wait.value}});
-  if(!odor.disabled&&odor.checked!==!!m.odor)w.push({path:'/api/command',data:{action:odor.checked?'odor_on':'odor_off'}});
-  const y=S.sync||{},sOn=$('sOn').checked,sUrl=$('sUrl').value.trim().replace(/\/+$/,''),sKey=$('sKey').value.trim();
-  if(sOn!==!!y.enabled||sUrl!==(y.url||'')||sKey){const r2=await api('/api/sync',{enabled:sOn?1:0,url:sUrl,key:sKey});toast(r2.message);if(!r2.ok)return;lastKey=''}
+$('formSettings').onsubmit=async e=>{e.preventDefault();if(busy)return;
+  setBusy(true);let ok=false;
+  try{
+    // An unedited weight is sent as the ESP has it now: it may have learned from a visit while the dialog was open.
+    const live=S.config.cats;
+    const r=await api('/api/config',{cats:draft.cats.map(c=>({name:c.name.trim(),weight_g:c.kg===c.shown?(live[c.from]?.weight_g??c.grams):Math.round(parseFloat(c.kg)*1000),color:c.color,from:c.from??-1})),
+      bin_limit_visits:+$('optLimit').value,tolerance_g:Math.round(parseFloat($('optTol').value)*1000)},true);
+    toast(r.message);if(!r.ok)return;
+    const y=S.sync||{},sOn=$('sOn').checked,sUrl=$('sUrl').value.trim().replace(/\/+$/,''),sKey=$('sKey').value.trim();
+    if(sOn!==!!y.enabled||sUrl!==(y.url||'')||sKey){const r2=await api('/api/sync',{enabled:sOn?1:0,url:sUrl,key:sKey});toast(r2.message);if(!r2.ok)return;lastKey=''}
+    ok=true;
+  }finally{setBusy(false)}
+  if(!ok)return;
+  // Settings kept by the litter box itself: send only what the user changed in this dialog.
+  const b=settingsBase,w=[],auto=$('mAuto'),wait=$('mWait'),odor=$('mOdor');
+  if(!auto.disabled&&auto.checked!==b.auto)w.push({path:'/api/command',data:{action:auto.checked?'auto_on':'auto_off'}});
+  if(!wait.disabled&&wait.value!==''&&+wait.value!==b.wait)w.push({path:'/api/value',data:{dp:117,value:+wait.value}});
+  if(!odor.disabled&&odor.checked!==b.odor)w.push({path:'/api/command',data:{action:odor.checked?'odor_on':'odor_off'}});
   $('dlgSettings').close();
-  if(w.length){toast(t('sending'));const sent=await mcuWrites(w);await sleep(1500);await refresh();
+  if(w.length){toast(t('sending'));setBusy(true);const sent=await mcuWrites(w).finally(()=>setBusy(false));await sleep(1500);await refresh();
     const s=S.mcu,kept=(auto.disabled||auto.checked===!!s.auto)&&(wait.disabled||wait.value===''||+wait.value===s.wait_min)&&(odor.disabled||odor.checked===!!s.odor);
     toast(!sent.ok?sent.message:kept?t('confirmed'):t('notConfirmed'))}
   else refresh()};
 // Both are recorded here even with the litter box offline; the MCU is told only when it is ready.
 async function maintenance(path,action,done,title,text,ok){
   const on=S.mcu.ready&&!S.mcu.presence&&!S.mcu.fault&&!S.mcu.lock;
-  if(!await confirmBox(title,text+(on?t('drum'):t('notReady')),ok))return;
-  busy=true;$('bag').disabled=$('litter').disabled=$('clean').disabled=true;
-  const r=await api(path);
-  if(r.ok&&on){const w=await mcuWrites([{path:'/api/command',data:{action}}]);toast(w.ok?done:t('refused',w.message))}else toast(r.message);
-  busy=false;lastKey='';refresh();
+  if(busy||!await confirmBox(title,text+(on?t('drum'):t('notReady')),ok))return;
+  setBusy(true);
+  try{
+    const r=await api(path);
+    if(r.ok&&on){const w=await mcuWrites([{path:'/api/command',data:{action}}]);toast(w.ok?done:t('refused',w.message))}else toast(r.message);
+  }finally{setBusy(false)}
+  lastKey='';refresh();
 }
 $('bag').onclick=()=>maintenance('/api/bin/reset','bag',t('bagDone'),t('bag'),t('bagText'),t('bagOk'));
 $('litter').onclick=()=>maintenance('/api/litter','level',t('litterDone'),t('litter'),t('litterText'),t('litterOk'));
 $('clean').onclick=async()=>{
-  if(!await confirmBox(t('cleanAsk'),t('cleanText'),t('cleanNow')))return;
-  busy=true;$('clean').disabled=true;
-  const r=await mcuWrites([{path:'/api/command',data:{action:'clean'}}]);toast(r.ok?t('cleanSent'):r.message);
-  busy=false;lastKey='';refresh();
+  if(busy||!await confirmBox(t('cleanAsk'),t('cleanText'),t('cleanNow')))return;
+  setBusy(true);
+  try{const r=await mcuWrites([{path:'/api/command',data:{action:'clean'}}]);toast(r.ok?t('cleanSent'):r.message)}finally{setBusy(false)}
+  lastKey='';refresh();
 };
 applyLang();setStatus('',t('connecting'));
 refresh();setInterval(refresh,5000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh()});

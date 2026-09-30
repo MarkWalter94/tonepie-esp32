@@ -36,7 +36,7 @@ uint32_t armSince=0,lastWrite=0,queryDue=0,badDp=0;
 bool heard=false,armed=false,mdns=false,wasWifi=false,queryScheduled=false,wrote=false;
 enum class Init { Heartbeat, Product, Mode, Ready };
 Init initState=Init::Heartbeat;
-uint8_t networkReported=255;
+uint8_t networkReported=255,netTries=0;
 bool networkAck=false;
 String token,commandIt="Nessun comando inviato",commandEn="No command sent";
 struct Pending { bool active=false; uint8_t id=0,type=0; uint32_t value=0,since=0; } pending;
@@ -48,17 +48,26 @@ Litter::Tracker tracker;
 Litter::WeightLog weights,weightScratch;
 struct Bin { uint32_t reserved=0,since=0,visits=0; } bin; // layout kept for the data saved by 1.x
 uint32_t litterAt=0; // when litter was last topped up
+// Tracker start-up: MCU signals received before the clock is known are replayed once it is (or after 30 s),
+// so that the saved counter can be compared with today's and the last visit restored first.
+struct Signal { uint8_t id; uint32_t value,at; }; // id 0 = query sent
+Signal early[24];
+uint8_t earlyCount=0;
+bool trackerStarted=false;
+uint16_t trackerVisitId=0; // visit the tracker's patches refer to
+void trackerSignal(uint8_t id,uint32_t value,uint32_t now);
 bool kgSeen=false,clockStarted=false,otaAllowed=false,otaOk=false,apOn=false;
 String wifiSsid,wifiPassword; // NVS values set from /dev override the ones in config.h
 uint32_t wifiSeen=0;
 // History server (optional): the whole current state is posted to <url>/api/ingest whenever it changes.
 // The POST runs in its own task so a slow or absent server never delays the MCU.
 bool syncOn=false,syncDirty=true;
-String syncUrl,syncKey,deviceId,syncError;
-uint32_t syncLastTry=0,syncOkAt=0,syncFails=0,wifiUpAt=0;
+String syncUrl,syncKey,deviceId;
+uint32_t syncLastTry=0,syncOkAt=0,syncFails=0,wifiUpAt=0,syncGen=0,syncTaskGen=0;
+int syncErrCode=0; // 0 = none, <0 HTTPClient error, >0 HTTP status
 struct DeletedRef { uint16_t id; uint32_t epoch; };
-DeletedRef deletedRefs[16]; // visits deleted here, reported until the server has seen them
-uint8_t deletedCount=0,deletedSent=0;
+struct DeletedList { uint8_t count; DeletedRef refs[16]; } deleted{}; // reported until the server has seen them; kept in NVS
+uint8_t deletedSent=0;
 TaskHandle_t syncTask=nullptr;
 volatile bool syncBusy=false,syncDone=false;
 volatile int syncCode=0;
@@ -84,11 +93,20 @@ void sendFrame(uint8_t cmd,const uint8_t* p=nullptr,size_t n=0) {
   size_t count=Tuya::encode(cmd,p,n,frame,sizeof(frame));
   if(!count)return;
   mcu.write(frame,count);
-  if(cmd==0x08)tracker.onQuerySent(millis());
+  if(cmd==0x08)trackerSignal(0,0,millis());
   logLine("TX "+hex(frame,count));
 }
 bool clockSynced() { return time(nullptr)>1700000000; }
 uint32_t epochNow() { return clockSynced()?uint32_t(time(nullptr)):0; }
+// Seconds east of UTC at that moment in the configured time zone (newlib's struct tm has no tm_gmtoff).
+int32_t utcOffset(uint32_t epoch) {
+  time_t t=epoch;struct tm l,g;localtime_r(&t,&l);gmtime_r(&t,&g);
+  int32_t days=l.tm_yday-g.tm_yday;if(days>1)days=-1;else if(days<-1)days=1; // across new year
+  return days*86400+(l.tm_hour-g.tm_hour)*3600+(l.tm_min-g.tm_min)*60;
+}
+// Day number of the local calendar day (like epoch / 86400, but midnight is local midnight).
+uint16_t localDay(uint32_t epoch) { return epoch?uint16_t((epoch+utcOffset(epoch))/86400):0; }
+void saveDeleted() { prefs.putBytes("deleted",&deleted,sizeof(deleted)); }
 void saveCats() { prefs.putBytes("cats",&cats,sizeof(cats));syncDirty=true; }
 void saveVisits() { prefs.putBytes("visits",&history,sizeof(history));prefs.putBytes("bin",&bin,sizeof(bin));syncDirty=true; }
 void loadStore() {
@@ -100,52 +118,87 @@ void loadStore() {
   memset(&weights,0,sizeof(weights));
   if(prefs.getBytesLength("weights")==sizeof(weights))prefs.getBytes("weights",&weights,sizeof(weights));
   Litter::sanitize(cats);Litter::sanitize(history);Litter::sanitize(weights);
+  Litter::rematch(cats,history); // settings reset to defaults: visits must not point at cats that are gone
   tracker.restore(prefs.isKey("count"),prefs.getUInt("count",0));
+  if(prefs.getBytesLength("deleted")==sizeof(deleted))prefs.getBytes("deleted",&deleted,sizeof(deleted));
+  if(deleted.count>16)deleted.count=0;
   litterAt=prefs.getUInt("litterAt",0);
   wifiSsid=prefs.getString("ssid",Config::WIFI_SSID);wifiPassword=prefs.getString("wpass",Config::WIFI_PASSWORD);
   syncOn=prefs.getBool("syncOn",false);syncUrl=prefs.getString("syncUrl","");syncKey=prefs.getString("syncKey","");
 }
 // A recognised weight feeds the trend chart and moves the cat's reference weight.
 void learnWeight(int8_t cat,uint16_t grams,uint32_t epoch) {
-  if(cat<0 || !grams)return;
-  cats.cats[cat].weightG=Litter::learn(cats.cats[cat].weightG,grams);saveCats();
-  if(epoch){Litter::addWeight(weights,cat,epoch,grams);prefs.putBytes("weights",&weights,sizeof(weights));}
+  if(cat<0 || cat>=cats.catCount || !grams)return;
+  uint16_t next=Litter::learn(cats.cats[cat].weightG,grams);
+  if(Litter::learnAllowed(cats,cat,next)){cats.cats[cat].weightG=next;saveCats();}
+  // The chart's days are local days: the log keys them by local midnight.
+  if(epoch){Litter::addWeight(weights,cat,uint32_t(localDay(epoch))*86400u,grams);prefs.putBytes("weights",&weights,sizeof(weights));}
 }
 // The recovery network always uses the password from config.h, never one typed later by mistake.
 const char* wifiPasswordForAp() { return Config::WIFI_PASSWORD; }
-void recordVisit(uint16_t weightG,uint16_t durationS) {
+uint16_t recordVisit(uint16_t weightG,uint16_t durationS,bool counted) {
   Litter::Visit v{};v.epoch=epochNow();v.weightG=weightG;v.durationS=durationS;
-  v.cat=Litter::matchCat(cats,weightG);
-  Litter::add(history,v);bin.visits++;learnWeight(v.cat,weightG,v.epoch);
+  v.cat=Litter::matchCat(cats,weightG);if(counted)v.flags|=Litter::VISIT_COUNTED;
+  uint16_t id=Litter::add(history,v).id;bin.visits++;learnWeight(v.cat,weightG,v.epoch);
   logLine("Visita registrata: "+String(weightG)+" g, "+String(durationS)+" s, "+(v.cat<0?String("gatto non riconosciuto"):String(cats.cats[v.cat].name)));
+  return id;
 }
 // Community mapping, not verified on this unit: DP7 visits (per day, resets), DP8 duration (s),
 // DP6 cat weight: grams on some Tonepie models (600-10000), kg x10 on others (6-300);
 // DP134 weight in lb x10 (used only if DP6 never shows up).
-void feedTracker(uint8_t id,uint32_t value) {
-  uint32_t now=millis();
-  if(id==7)tracker.onCount(value,now);
+void trackerSignal(uint8_t id,uint32_t value,uint32_t now) {
+  if(!trackerStarted){if(earlyCount<24)early[earlyCount++]={id,value,now};return;}
+  if(id==0)tracker.onQuerySent(now);
+  else if(id==7)tracker.onCount(value,now);
   else if(id==8 && value && value<=65535)tracker.onDuration(uint16_t(value),now);
   else if(id==6 && value>=5 && value<=300){kgSeen=true;tracker.onWeight(uint16_t(value*100),now);}
   else if(id==6 && value>=500 && value<=30000){kgSeen=true;tracker.onWeight(uint16_t(value),now);}
   else if(id==134 && !kgSeen && value>=10 && value<=660)tracker.onWeight(uint16_t(value*4536/100),now);
 }
+// Runs once, when the clock is known (or after 30 s without it).
+void startTracker(uint32_t now) {
+  trackerStarted=true;
+  if(clockSynced()){
+    // The MCU resets its counter at midnight: a counter saved on another day counts from 0.
+    uint16_t today=localDay(epochNow()),saved=prefs.getUShort("countDay",0);
+    if(prefs.isKey("count") && saved && saved!=today){tracker.restore(true,0);logLine("Contatore visite di un altro giorno: riparte da 0");}
+    // The last visit before the restart, so its late signals patch it instead of making a duplicate.
+    if(history.count){
+      const auto& v=history.v[history.count-1];uint32_t t=epochNow();
+      if(v.epoch && t>=v.epoch && t-v.epoch<Litter::Tracker::LATE_MS/1000){
+        tracker.restoreLast(now,(t-v.epoch)*1000,v.flags&Litter::VISIT_COUNTED,v.weightG>0,v.durationS>0);trackerVisitId=v.id;
+      }
+    }
+  }
+  for(uint8_t i=0;i<earlyCount;i++)trackerSignal(early[i].id,early[i].value,early[i].at);
+  earlyCount=0;
+}
 void serviceTracker(uint32_t now) {
   if(!clockSynced() && now<30000)return; // let NTP answer first, so visits found at boot get a time
+  if(!trackerStarted)startTracker(now);
   Litter::Event e;bool changed=false;
   while(tracker.poll(now,e)){
     changed=true;
     if(e.kind==Litter::Event::New){
-      for(uint16_t i=1;i<e.n && i<=10;i++)recordVisit(0,0); // missed while offline: nothing known about them
-      recordVisit(e.weightG,e.durationS);
-    }else if(history.count){
-      Litter::Visit& v=history.v[history.count-1];
-      if(e.kind==Litter::Event::PatchDuration)v.durationS=e.durationS;
-      else{v.weightG=e.weightG;if(!(v.flags&Litter::VISIT_MANUAL)){v.cat=Litter::matchCat(cats,e.weightG);learnWeight(v.cat,e.weightG,v.epoch);}}
+      bool counted=tracker.lastCounted();
+      for(uint16_t i=1;i<e.n && i<=10;i++)recordVisit(0,0,counted); // missed while offline: nothing known about them
+      trackerVisitId=recordVisit(e.weightG,e.durationS,counted);
+      continue;
+    }
+    // Patches belong to the tracker's last visit: gone if it was deleted meanwhile.
+    Litter::Visit* v=Litter::find(history,trackerVisitId);
+    if(!v)continue;
+    if(e.kind==Litter::Event::PatchCount)v->flags|=Litter::VISIT_COUNTED;
+    else if(e.kind==Litter::Event::PatchDuration)v->durationS=e.durationS;
+    else{
+      bool learned=v->weightG>0; // a repeated weight updates the visit but is not learned twice
+      v->weightG=e.weightG;
+      if(!(v->flags&Litter::VISIT_MANUAL)){v->cat=Litter::matchCat(cats,e.weightG);if(!learned)learnWeight(v->cat,e.weightG,v->epoch);}
     }
   }
   if(changed)saveVisits();
-  if(tracker.countDirty){tracker.countDirty=false;prefs.putUInt("count",tracker.count);}
+  // Only the part of the counter already turned into saved visits: a restart before a visit is saved finds it again.
+  if(tracker.countDirty){tracker.countDirty=false;prefs.putUInt("count",tracker.committed());if(clockSynced())prefs.putUShort("countDay",localDay(epochNow()));}
 }
 void sendBoolDP(uint8_t id,bool value) {
   uint8_t p[]={id,1,0,1,uint8_t(value)};sendFrame(0x06,p,sizeof(p));
@@ -209,7 +262,7 @@ void reportDps(const uint8_t* p,size_t n) {
       if(pending.active && pending.id==id && pending.type==type && number(*d)==pending.value){
         pending.active=false;commandIt="DP "+String(id)+" riportato con valore richiesto; azione fisica non verificata";commandEn="DP "+String(id)+" reported with the requested value; physical action not verified";logLine(commandIt);
       }
-      if(type==2)feedTracker(id,Tuya::read32(d->data));
+      if(type==2 && (id==6||id==7||id==8||id==134))trackerSignal(id,Tuya::read32(d->data),millis());
     }else logLine("Cache DP piena: report non memorizzato");
     pos+=4+len;
   }
@@ -233,7 +286,7 @@ void onFrame(uint8_t version,uint8_t cmd,const uint8_t* p,size_t n) {
         if(n==2)logLine("Modo autonomo MCU: pin LED/reset ricevuti ma NON pilotati");
         // Network status is sent by loop(), then query follows it.
       }break;
-    case 0x03:if(n==0){networkAck=true;queryScheduled=true;queryDue=millis()+100;}break;
+    case 0x03:if(n==0){networkAck=true;netTries=0;queryScheduled=true;queryDue=millis()+100;}break;
     case 0x04:case 0x05:
       // Acknowledge physical pairing requests; credentials stay fixed.
       if((cmd==4 && n==0)||(cmd==5 && n==1)){sendFrame(cmd);armed=false;logLine("Richiesta pairing MCU: credenziali fisse, invii disabilitati");}break;
@@ -284,8 +337,13 @@ void writeDp(uint8_t id,uint8_t type,uint32_t value){
        (fault && fault->type==5 && number(*fault)) ||
        (lock && lock->type==1 && number(*lock))){reply(409,"Presenza, fault o blocco segnalato: comando bloccato","Presence, fault or lock reported: command blocked");return;}
   }
-  pending.active=true;pending.id=id;pending.type=type;pending.value=value;pending.since=millis();
   lastWrite=millis();wrote=true;
+  if(id==126 && !findDp(126)){ // push button never reported: nothing to wait for
+    sendBoolDP(id,value!=0);
+    commandIt="DP126 trasmesso: la lettiera non conferma questo comando";commandEn="DP126 sent: the litter box does not confirm this command";
+    reply(202,commandIt,commandEn);return;
+  }
+  pending.active=true;pending.id=id;pending.type=type;pending.value=value;pending.since=millis();
   if(type==1)sendBoolDP(id,value!=0);else sendValueDP(id,value);
   commandIt="DP "+String(id)+" trasmesso: attesa report, esecuzione non confermata";
   commandEn="DP "+String(id)+" sent: waiting for the report, execution not confirmed";
@@ -314,7 +372,7 @@ void stateApi(){
   String body;serializeJson(doc,body);server.sendHeader("Cache-Control","no-store");server.send(200,"application/json",body);
 }
 String snapshotJson(){
-  DynamicJsonDocument doc(14000);
+  DynamicJsonDocument doc(11000); // ~9 KB with 64 visits and 16 deletions
   doc["device"]=deviceId;doc["firmware"]=Config::FIRMWARE_VERSION;doc["now"]=epochNow();
   JsonArray c=doc.createNestedArray("cats");
   for(int i=0;i<cats.catCount;i++){auto j=c.createNestedObject();j["index"]=i;j["name"]=cats.cats[i].name;j["color"]=cats.cats[i].color;j["weightG"]=cats.cats[i].weightG;}
@@ -324,7 +382,7 @@ String snapshotJson(){
   for(int i=0;i<history.count;i++){const auto& x=history.v[i];auto j=v.createNestedObject();
     j["id"]=x.id;j["t"]=x.epoch;j["g"]=x.weightG;j["s"]=x.durationS;j["cat"]=x.cat;j["manual"]=(x.flags&Litter::VISIT_MANUAL)!=0;}
   JsonArray d=doc.createNestedArray("deleted");
-  for(int i=0;i<deletedCount;i++){auto j=d.createNestedObject();j["id"]=deletedRefs[i].id;j["t"]=deletedRefs[i].epoch;}
+  for(int i=0;i<deleted.count;i++){auto j=d.createNestedObject();j["id"]=deleted.refs[i].id;j["t"]=deleted.refs[i].epoch;}
   String out;serializeJson(doc,out);return out;
 }
 void syncWorker(void*){
@@ -344,28 +402,40 @@ void syncWorker(void*){
     syncBody=String();syncCode=code;syncDone=true;syncBusy=false;
   }
 }
+String syncErrorText(int code,bool en){
+  switch(code){
+    case 0:return "";
+    case HTTPC_ERROR_CONNECTION_REFUSED:return en?"connection refused":"connessione rifiutata";
+    case HTTPC_ERROR_READ_TIMEOUT:return en?"no answer in time":"nessuna risposta in tempo";
+    case HTTPC_ERROR_CONNECTION_LOST:case HTTPC_ERROR_NOT_CONNECTED:return en?"connection lost":"connessione persa";
+    case 401:return en?"wrong API key":"chiave API errata";
+    case 400:return en?"data refused by the server":"dati rifiutati dal server";
+  }
+  if(code<0)return String(en?"network error ":"errore di rete ")+code;
+  return String("HTTP ")+code;
+}
 void serviceSync(uint32_t now){
   if(!syncTask || syncBusy)return;
   if(syncDone){
     syncDone=false;int code=syncCode;
-    if(code>=200 && code<300){
-      syncOkAt=epochNow();syncFails=0;syncError="";
+    if(syncTaskGen!=syncGen){syncDirty=true;} // settings changed meanwhile: that answer came from the old server
+    else if(code>=200 && code<300){
+      syncOkAt=epochNow();syncFails=0;syncErrCode=0;
       // Deletions reported in this snapshot are now on the server; newer ones stay queued.
-      memmove(deletedRefs,deletedRefs+deletedSent,(deletedCount-deletedSent)*sizeof(DeletedRef));deletedCount-=deletedSent;
+      if(deletedSent){memmove(deleted.refs,deleted.refs+deletedSent,(deleted.count-deletedSent)*sizeof(DeletedRef));deleted.count-=deletedSent;saveDeleted();}
     }else{
-      syncDirty=true;syncFails++;
-      syncError=code<0?HTTPClient::errorToString(code):String("HTTP ")+code+(code==401?" (API key)":"");
-      if(syncFails==1)logLine("Server storico: invio fallito, "+syncError);
+      syncDirty=true;syncFails++;syncErrCode=code;
+      if(syncFails==1)logLine("Server storico: invio fallito, "+syncErrorText(code,false));
     }
     deletedSent=0;
   }
   if(!syncOn || syncUrl.isEmpty() || syncKey.isEmpty() || WiFi.status()!=WL_CONNECTED || !clockSynced())return;
   if(uint32_t(now-wifiUpAt)<10000)return; // right after connecting the first request often fails
-  // Changes go out within seconds; otherwise a heartbeat every 15 min. Failures back off up to 5 min.
-  uint32_t wait=syncFails?min(300000u,15000u<<min(syncFails,uint32_t(4))):(syncDirty?3000u:900000u);
+  // Changes go out within seconds; otherwise a heartbeat every 15 min. Failures: 30 s, doubling up to 5 min.
+  uint32_t wait=syncFails?min(300000u,15000u<<min(syncFails,uint32_t(5))):(syncDirty?3000u:900000u);
   if(syncLastTry && uint32_t(now-syncLastTry)<wait)return;
   syncLastTry=now;if(!syncLastTry)syncLastTry=1;syncDirty=false;
-  syncBody=snapshotJson();deletedSent=deletedCount;
+  syncBody=snapshotJson();deletedSent=deleted.count;syncTaskGen=syncGen;
   syncTarget=syncUrl+"/api/ingest";syncAuth="Bearer "+syncKey;
   syncBusy=true;xTaskNotifyGive(syncTask);
 }
@@ -373,26 +443,33 @@ void serviceSync(uint32_t now){
 // so browsers that block requests from one local address to another (and ad blockers) do not matter.
 class ClientOut : public Stream { // streams the server's answer to the browser without buffering it
 public:
+  uint32_t until=0; // deadline: returning 0 makes HTTPClient stop reading
   size_t write(uint8_t c) override { return write(&c,1); }
-  size_t write(const uint8_t* b,size_t n) override { server.sendContent((const char*)b,n);return n; }
+  size_t write(const uint8_t* b,size_t n) override {
+    if(!server.client().connected() || int32_t(millis()-until)>=0)return 0;
+    server.sendContent((const char*)b,n);return n;
+  }
   int available() override { return 0; } int read() override { return -1; } int peek() override { return -1; } void flush() override {}
 };
 void historyApi(){
   if(!allowedHost()){reply(403,"Host non ammesso","Host not allowed");return;}
   if(!syncOn || syncUrl.isEmpty()){reply(404,"Server storico non configurato","History server not configured");return;}
   uint32_t days=90;parseUnsigned(server.arg("days"),days);if(days>3660)days=3660;
+  // This runs on the loop task: short timeouts and a total deadline keep the MCU link alive (its timeout is 15 s).
   WiFiClient plain;WiFiClientSecure secure;HTTPClient http;
-  bool tls=syncUrl.startsWith("https://");if(tls)secure.setInsecure();
-  http.setConnectTimeout(3000);http.setTimeout(5000);
+  bool tls=syncUrl.startsWith("https://");if(tls){secure.setInsecure();secure.setHandshakeTimeout(4);}
+  http.setConnectTimeout(2500);http.setTimeout(3000);
   String url=syncUrl+"/api/history?device="+deviceId+"&days="+String(days);
   if(!(tls?http.begin(secure,url):http.begin(plain,url))){reply(502,"Server storico non raggiungibile","History server unreachable");return;}
+  http.addHeader("Authorization","Bearer "+syncKey);
   int code=http.GET();
-  if(code!=200){String e=code<0?HTTPClient::errorToString(code):String("HTTP ")+code;http.end();
-    reply(502,"Server storico non raggiungibile: "+e,"History server unreachable: "+e);return;}
+  if(code==404){http.end();reply(404,"Nessun dato sul server per questa lettiera","No data on the server for this litter box yet");return;}
+  if(code!=200){http.end();reply(502,"Server storico non raggiungibile: "+syncErrorText(code,false),"History server unreachable: "+syncErrorText(code,true));return;}
   server.sendHeader("Cache-Control","no-store");server.setContentLength(CONTENT_LENGTH_UNKNOWN);server.send(200,"application/json","");
-  ClientOut out;http.writeToStream(&out);http.end();server.sendContent("");
+  ClientOut out;out.until=millis()+8000;http.writeToStream(&out);http.end();server.sendContent("");
 }
-// Settings of the history server from the home page. An empty key keeps the one already saved.
+// Settings of the history server from the home page. An empty key keeps the one already saved, but only
+// for the same address: otherwise anyone on the network could point the ESP at their own server and get the key.
 void syncApi(){
   if(!protect())return;
   bool on=server.arg("enabled")=="1";String url=server.arg("url"),key=server.arg("key");url.trim();key.trim();
@@ -400,19 +477,20 @@ void syncApi(){
   if(url.length()>120 || url.indexOf(' ')>=0 || (!url.isEmpty() && !url.startsWith("http://") && !url.startsWith("https://"))){
     reply(400,"Indirizzo non valido: deve iniziare con http:// o https://","Invalid address: it must start with http:// or https://");return;}
   if(!key.isEmpty() && (key.length()<16 || key.length()>64)){reply(400,"La chiave deve avere da 16 a 64 caratteri","The key must be 16 to 64 characters");return;}
-  if(key.isEmpty())key=syncKey;
+  if(key.isEmpty() && url==syncUrl)key=syncKey;
+  if(on && key.isEmpty() && !url.isEmpty() && url!=syncUrl){reply(400,"Nuovo indirizzo: inserisci di nuovo la chiave","New address: enter the key again");return;}
   if(on && (url.isEmpty() || key.isEmpty())){reply(400,"Per attivarlo servono indirizzo e chiave","Address and key are needed to enable it");return;}
   syncOn=on;syncUrl=url;syncKey=key;prefs.putBool("syncOn",on);prefs.putString("syncUrl",url);prefs.putString("syncKey",key);
-  syncDirty=true;syncFails=0;syncLastTry=0;syncError="";syncOkAt=0;
+  syncDirty=true;syncFails=0;syncLastTry=0;syncErrCode=0;syncOkAt=0;syncGen++;
   logLine(String("Server storico ")+(on?"attivo: "+url:"disattivato"));
   reply(200,"Impostazioni del server salvate","Server settings saved");
 }
 void homeApi(){
   if(!allowedHost()){reply(403,"Host non ammesso","Host not allowed");return;}
-  DynamicJsonDocument doc(40000);
+  DynamicJsonDocument doc(26000); // ~20 KB with 64 visits and 4 x 90 days of weights
   doc["firmware"]=Config::FIRMWARE_VERSION;doc["token"]=token;doc["now"]=epochNow();
   JsonObject m=doc.createNestedObject("mcu");
-  m["online"]=online();m["ready"]=online()&&initState==Init::Ready;m["pending"]=pending.active;
+  m["online"]=online();m["ready"]=online()&&initState==Init::Ready;m["pending"]=pending.active;m["armed"]=isArmed();
   auto presence=findDp(104);auto fault=findDp(22);auto lock=findDp(114);
   if(presence && presence->type==1)m["presence"]=number(*presence)!=0;
   if(fault && fault->type==5)m["fault"]=number(*fault);
@@ -431,7 +509,7 @@ void homeApi(){
   doc["litter_at"]=litterAt;
   JsonObject sync=doc.createNestedObject("sync");
   sync["enabled"]=syncOn;sync["url"]=syncUrl;sync["device"]=deviceId;sync["key_set"]=!syncKey.isEmpty();
-  sync["ok_at"]=syncOkAt;sync["error"]=syncError;sync["pending"]=syncOn&&(syncDirty||syncBusy);
+  sync["ok_at"]=syncOkAt;sync["error"]=syncErrorText(syncErrCode,english());sync["pending"]=syncOn&&(syncDirty||syncBusy);
   JsonObject b=doc.createNestedObject("bin");b["since"]=bin.since;b["visits"]=bin.visits;
   JsonArray visitArray=doc.createNestedArray("visits"); // newest first
   for(int i=int(history.count)-1;i>=0;i--){const auto& v=history.v[i];auto j=visitArray.createNestedObject();
@@ -454,17 +532,21 @@ void configApi(){
   Litter::Settings next;Litter::defaults(next);
   int8_t from[Litter::MAX_CATS];bool taken[Litter::MAX_CATS]{};
   for(JsonObject c:list){
-    const char* name=c["name"]|"";uint32_t weight=c["weight_g"]|0u;
-    if(!*name || weight<500 || weight>20000){reply(400,"Ogni gatto richiede un nome e un peso fra 0,5 e 20 kg","Each cat needs a name and a weight between 0.5 and 20 kg");return;}
+    String name=c["name"]|"";name.trim();uint32_t weight=c["weight_g"]|0u;
+    if(name.isEmpty() || weight<500 || weight>20000){reply(400,"Ogni gatto richiede un nome e un peso fra 0,5 e 20 kg","Each cat needs a name and a weight between 0.5 and 20 kg");return;}
     // "from": index this cat had before the edit, so its visits and weight history follow it.
     int previous=c["from"]|-1;
     if(previous<0 || previous>=cats.catCount || taken[previous])previous=-1;else taken[previous]=true;
     from[next.catCount]=int8_t(previous);
     Litter::Cat& cat=next.cats[next.catCount++];
-    copyName(cat.name,sizeof(cat.name),name);cat.weightG=uint16_t(weight);cat.color=uint8_t((c["color"]|0u)%6);
+    copyName(cat.name,sizeof(cat.name),name.c_str());cat.weightG=uint16_t(weight);cat.color=uint8_t((c["color"]|0u)%6);
   }
   next.toleranceG=Litter::clampU16(doc["tolerance_g"]|uint32_t(cats.toleranceG),100,3000);
   next.binLimitVisits=Litter::clampU16(doc["bin_limit_visits"]|uint32_t(cats.binLimitVisits),5,500);
+  for(int i=0;i<next.catCount;i++)for(int j=i+1;j<next.catCount;j++){
+    uint16_t a=next.cats[i].weightG,b=next.cats[j].weightG;
+    if((a>b?a-b:b-a)<Litter::MIN_GAP_G){reply(400,"Due gatti hanno quasi lo stesso peso: non potrei distinguerli","Two cats have almost the same weight: they could not be told apart");return;}
+  }
   Litter::remapCats(history,weights,weightScratch,from,next.catCount);
   cats=next;Litter::rematch(cats,history);saveCats();saveVisits();prefs.putBytes("weights",&weights,sizeof(weights));
   reply(200,"Impostazioni salvate","Settings saved");
@@ -476,8 +558,8 @@ void visitApi(){
   if(!v){reply(404,"Visita non trovata","Visit not found");return;}
   String cat=server.arg("cat");uint32_t index;
   if(cat=="delete"){
-    if(deletedCount==16){memmove(deletedRefs,deletedRefs+1,15*sizeof(DeletedRef));deletedCount--;if(deletedSent)deletedSent--;}
-    deletedRefs[deletedCount++]={v->id,v->epoch};
+    if(deleted.count==16){memmove(deleted.refs,deleted.refs+1,15*sizeof(DeletedRef));deleted.count--;if(deletedSent)deletedSent--;}
+    deleted.refs[deleted.count++]={v->id,v->epoch};saveDeleted();
     // Only visits after the last bag change are part of the current count.
     if(!(v->epoch && bin.since && v->epoch<bin.since) && bin.visits)bin.visits--;
     Litter::remove(history,uint16_t(id));saveVisits();reply(200,"Visita eliminata","Visit deleted");return;
@@ -587,7 +669,7 @@ void loop(){
   if(online() && (initState==Init::Product||initState==Init::Mode) && uint32_t(now-lastInitTx)>=2000){sendFrame(initState==Init::Product?1:2);lastInitTx=now;}
   bool connected=WiFi.status()==WL_CONNECTED;
   if(connected && !wasWifi){wifiUpAt=now;logLine("Wi-Fi connesso: http://"+WiFi.localIP().toString());mdns=MDNS.begin(Config::HOSTNAME);if(mdns)MDNS.addService("http","tcp",80);
-    // Clock for visit times only: the MCU time request (1C) is still answered "not available".
+    // Clock for visit times and for the MCU's time request (1C), answered with local time once synced.
     if(!clockStarted){clockStarted=true;configTzTime(Config::TIMEZONE,Config::NTP_PRIMARY,Config::NTP_FALLBACK);}}
   if(!connected && wasWifi){armed=false;if(mdns)MDNS.end();mdns=false;logLine("Wi-Fi scollegato");}
   wasWifi=connected;
@@ -604,9 +686,12 @@ void loop(){
   // 2 = not connected. With 3 (router only) the MCU keeps its Wi-Fi LED blinking, so the
   // module reports the "connected" state a Tuya module would give once fully online.
   uint8_t network=connected?Config::NETWORK_CONNECTED:2;
-  if(online() && initState==Init::Ready && (networkReported!=network || (!networkAck && uint32_t(now-lastNetTx)>=2000))){
+  // Unacknowledged: three quick retries, then once a minute. The query follows the MCU's acknowledgement;
+  // only the first attempt also schedules one, so an MCU that never acknowledges is still read.
+  if(networkReported!=network)netTries=0;
+  if(online() && initState==Init::Ready && (networkReported!=network || (!networkAck && uint32_t(now-lastNetTx)>=(netTries<3?2000u:60000u)))){
     networkReported=network;networkAck=false;lastNetTx=now;sendFrame(3,&network,1);
-    queryScheduled=true;queryDue=now+500;
+    if(!netTries++){queryScheduled=true;queryDue=now+500;}
   }
   if(queryScheduled && int32_t(now-queryDue)>=0){queryScheduled=false;if(online())sendFrame(8);}
   if(pending.active && uint32_t(now-pending.since)>=5000){pending.active=false;commandIt="Report atteso non ricevuto: esito sconosciuto (nessun reinvio automatico)";commandEn="Expected report not received: result unknown (no automatic resend)";logLine(commandIt);}

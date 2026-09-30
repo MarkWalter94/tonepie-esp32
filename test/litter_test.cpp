@@ -87,7 +87,7 @@ int main() {
     t.onWeight(4200, 100000);
     assert(drain(t, 105000, ev) == 1 && ev[0].kind == Event::New && ev[0].weightG == 4200 && ev[0].durationS == 0);
     t.onCount(11, 200000); t.onDuration(95, 200010);
-    assert(drain(t, 210000, ev) == 1 && ev[0].kind == Event::PatchDuration && ev[0].durationS == 95);
+    assert(drain(t, 210000, ev) == 2 && ev[0].kind == Event::PatchCount && ev[1].kind == Event::PatchDuration && ev[1].durationS == 95);
     // Next visit an hour later is a new one
     t.onWeight(5600, 3800000); t.onCount(12, 3800010);
     assert(drain(t, 3805000, ev) == 1 && ev[0].kind == Event::New && ev[0].weightG == 5600);
@@ -104,12 +104,71 @@ int main() {
     t.onQuerySent(2000); t.onWeight(4200, 2010); t.onCount(13, 2011); t.onDuration(40, 2012);
     assert(drain(t, 7000, ev) == 1 && ev[0].kind == Event::New && ev[0].n == 3 && ev[0].weightG == 4200 && ev[0].durationS == 40);
   }
-  { // Counter reset is a new baseline; millis wrap is harmless
+  { // Counter reset to 0 creates no visit; millis wrap is harmless
     Tracker t; t.restore(true, 10);
     t.onCount(0, 5000); assert(drain(t, 20000) == 0 && t.count == 0);
     t.onWeight(4200, 0xFFFFFF00u); t.onCount(1, 0xFFFFFF80u);
     assert(drain(t, 0xFFFFFFF0u) == 0);
     assert(drain(t, 0x00001000u, ev) == 1 && ev[0].n == 1 && ev[0].weightG == 4200);
+  }
+  { // Midnight reset and the first visit of the day in one report: the visit is counted
+    Tracker t; t.restore(true, 10);
+    t.onCount(1, 5000);
+    assert(drain(t, 10000, ev) == 1 && ev[0].kind == Event::New && ev[0].n == 1 && t.count == 1);
+  }
+  { // The count is persisted only once the visit is recorded
+    Tracker t; t.restore(true, 10);
+    t.onCount(12, 1000);
+    assert(t.committed() == 10 && drain(t, 2000) == 0 && t.committed() == 10);
+    assert(drain(t, 6000, ev) == 1 && ev[0].n == 2 && t.committed() == 12 && t.countDirty);
+  }
+  { // After a restart the last visit is restored: its late count patches it, no duplicate
+    Tracker t; t.restore(true, 10);
+    t.restoreLast(5000, 60000, false, true, false);
+    t.onCount(11, 5000);
+    assert(drain(t, 20000, ev) == 1 && ev[0].kind == Event::PatchCount);
+    Tracker old; old.restore(true, 10); old.restoreLast(5000, Tracker::LATE_MS, false, true, false);
+    old.onCount(11, 5000);
+    assert(drain(old, 20000, ev) == 1 && ev[0].kind == Event::New); // too old to belong to it
+  }
+  { // Boot query with values, first poll delayed (no clock yet): values still belong to the visit
+    Tracker t; t.restore(true, 10);
+    t.onQuerySent(2000); t.onWeight(4200, 2010); t.onCount(11, 2011); t.onDuration(40, 2012);
+    assert(drain(t, 30000, ev) == 1 && ev[0].weightG == 4200 && ev[0].durationS == 40);
+  }
+  { // A weight repeated in a query response is not given to a later visit
+    Tracker t; t.restore(true, 10);
+    t.onQuerySent(1000); t.onWeight(5600, 1010); t.onDuration(80, 1011);
+    assert(drain(t, 3000) == 0);
+    t.onCount(11, 10000);
+    assert(drain(t, 15000, ev) == 1 && ev[0].kind == Event::New && ev[0].weightG == 0 && ev[0].durationS == 0);
+  }
+  { // 49.7 days without visits: millis() wraps, a new visit is not taken for a patch of the old one
+    Tracker t; t.restore(true, 10);
+    t.onWeight(4200, 1000);
+    assert(drain(t, 6000, ev) == 1 && ev[0].kind == Event::New);
+    assert(drain(t, 2000000) == 0);           // periodic polls expire the old visit
+    t.onWeight(4400, 31000);                  // same millis() value range, 2^32 ms later
+    assert(drain(t, 36000, ev) == 1 && ev[0].kind == Event::New && ev[0].weightG == 4400);
+  }
+  { // Corrupted cat indexes loaded from flash
+    History hc; memset(&hc, 0, sizeof(hc));
+    Visit v{}; v.cat = 100; v.flags = VISIT_MANUAL; add(hc, v);
+    Visit u{}; u.cat = -7; add(hc, u);
+    static WeightLog wl, sc; memset(&wl, 0, sizeof(wl)); wl.version = 1;
+    int8_t from[MAX_CATS] = {0, 1, -1, -1};
+    remapCats(hc, wl, sc, from, 2); // bounds-checked even before sanitize
+    assert(hc.v[0].cat == CAT_UNKNOWN);
+    hc.v[0].cat = 100; hc.v[0].flags = VISIT_MANUAL; sanitize(hc);
+    assert(hc.v[0].cat == CAT_UNKNOWN && !(hc.v[0].flags & VISIT_MANUAL) && hc.v[1].cat == CAT_UNKNOWN);
+  }
+  { // Learning never brings two cats within MIN_GAP_G of each other
+    Settings c = twoCats();
+    assert(!learnAllowed(c, 0, 5550) && learnAllowed(c, 0, 4300) && learnAllowed(c, 1, 5400));
+  }
+  { // Migration with missing values
+    Settings m = twoCats(); m.version = 1; m.reserved = 0; m.binLimitVisits = 0;
+    sanitize(m); assert(m.version == 2 && m.binLimitVisits == 5);
   }
   puts("litter_test: PASS");
   return 0;

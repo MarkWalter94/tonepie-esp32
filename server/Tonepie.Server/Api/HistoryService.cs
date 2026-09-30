@@ -3,9 +3,9 @@ using Tonepie.Server.Data;
 
 namespace Tonepie.Server.Api;
 
-public class HistoryService(TonepieDb db, TimeProvider clock, IConfiguration config)
+public class HistoryService(TonepieDb db, TimeProvider clock, LocalTimeZone local)
 {
-    public TimeZoneInfo Zone { get; } = TimeZoneInfo.FindSystemTimeZoneById(config["Tonepie:TimeZone"] ?? "Europe/Rome");
+    public TimeZoneInfo Zone => local.Zone;
 
     /// <summary>Visits per local day and cat over the last <paramref name="days"/> days (0 = everything).</summary>
     public async Task<History?> GetAsync(string deviceId, int days, CancellationToken ct)

@@ -13,7 +13,7 @@ public record Snapshot(
     List<SnapshotVisit>? Visits,
     List<VisitRef>? Deleted);
 
-public record SnapshotCat(int Index, string Name, int Color, int WeightG);
+public record SnapshotCat(int Index, string? Name, int Color, int WeightG);
 public record SnapshotBin(long Since, int Visits, int Limit);
 public record SnapshotVisit(int Id, long T, int G, int S, int Cat, bool Manual);
 public record VisitRef(int Id, long T);

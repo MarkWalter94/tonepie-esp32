@@ -9,7 +9,8 @@ namespace Litter {
 constexpr int MAX_CATS = 4;
 constexpr int MAX_VISITS = 64;
 constexpr int8_t CAT_UNKNOWN = -1;
-constexpr uint8_t VISIT_MANUAL = 1; // assigned by hand: never re-matched
+constexpr uint8_t VISIT_MANUAL = 1;  // assigned by hand: never re-matched
+constexpr uint8_t VISIT_COUNTED = 2; // the MCU's visit counter already accounted for this visit
 
 struct Cat { char name[24]; uint16_t weightG; uint8_t color, reserved; };
 struct Settings {
@@ -41,7 +42,11 @@ inline void sanitize(Settings& s) {
   for (auto& c : s.cats) c.name[sizeof(c.name) - 1] = 0;
 }
 inline void sanitize(History& h) {
-  if (h.count > MAX_VISITS) { memset(&h, 0, sizeof(h)); }
+  if (h.count > MAX_VISITS) { memset(&h, 0, sizeof(h)); return; }
+  for (uint16_t i = 0; i < h.count; i++) {
+    Visit& v = h.v[i];
+    if (v.cat < CAT_UNKNOWN || v.cat >= MAX_CATS) { v.cat = CAT_UNKNOWN; v.flags &= ~VISIT_MANUAL; }
+  }
 }
 
 // Nearest reference weight within tolerance; a tie between two cats stays unknown.
@@ -88,6 +93,16 @@ inline void addWeight(WeightLog& w, int cat, uint32_t epoch, uint16_t grams) {
 }
 // The reference weight follows the cat as it grows or slims down, so it keeps being recognised.
 inline uint16_t learn(uint16_t reference, uint16_t grams) { return uint16_t((uint32_t(reference) * 4 + grams + 2) / 5); }
+// Learning must not bring two cats' reference weights so close that every reading becomes a tie.
+constexpr uint16_t MIN_GAP_G = 100;
+inline bool learnAllowed(const Settings& s, int cat, uint16_t next) {
+  for (int i = 0; i < s.catCount; i++) {
+    if (i == cat || !s.cats[i].weightG) continue;
+    uint16_t o = s.cats[i].weightG;
+    if ((next > o ? next - o : o - next) < MIN_GAP_G) return false;
+  }
+  return true;
+}
 // After the cat list is edited: from[i] is the previous index of new cat i, or -1 for a new cat.
 inline void remapCats(History& h, WeightLog& w, WeightLog& scratch, const int8_t* from, int newCount) {
   int8_t to[MAX_CATS]; for (auto& t : to) t = CAT_UNKNOWN;
@@ -95,7 +110,7 @@ inline void remapCats(History& h, WeightLog& w, WeightLog& scratch, const int8_t
   for (uint16_t i = 0; i < h.count; i++) {
     Visit& v = h.v[i];
     if (v.cat < 0) continue;
-    v.cat = to[v.cat];
+    v.cat = v.cat < MAX_CATS ? to[v.cat] : CAT_UNKNOWN;
     if (v.cat < 0) v.flags &= ~VISIT_MANUAL;
   }
   scratch = w; memset(&w, 0, sizeof(w)); w.version = 1;
@@ -123,15 +138,17 @@ inline bool remove(History& h, uint16_t id) {
 }
 
 struct Event {
-  enum Kind : uint8_t { New, PatchWeight, PatchDuration } kind;
+  enum Kind : uint8_t { New, PatchWeight, PatchDuration, PatchCount } kind;
   uint16_t n, weightG, durationS; // New: n visits, only the last one carries weight/duration
 };
 
 // Turns MCU reports into visits. Three signals describe a visit: the visit
 // counter (DP7) increasing, a weight report (DP6) and a duration report (DP8).
 // Their order and timing on the real unit are not verified, so any of them may
-// open a visit; the others are merged if they arrive shortly before or after.
-// Weight/duration repeated inside a query response never open a visit.
+// open a visit; the others are merged if they arrive shortly before or after
+// (patches refer to the last visit produced). Weight/duration repeated inside a
+// query response never open a visit and are used only by a visit opened by that
+// same response.
 class Tracker {
 public:
   static constexpr uint32_t QUERY_WINDOW_MS = 1500, SETTLE_MS = 4000, FRESH_MS = 20000,
@@ -139,58 +156,87 @@ public:
   bool haveCount = false, countDirty = false;
   uint32_t count = 0;
 
+  // value: counter saved before a restart. A counter saved on another day must be restored as 0 by
+  // the caller: the MCU resets it at midnight, so every visit counted since then is new.
   void restore(bool have, uint32_t value) { haveCount = have; count = value; }
+  // The last visit recorded before a restart, so that late signals after the restart patch it
+  // instead of opening a duplicate. ageMs: how long ago it was recorded.
+  void restoreLast(uint32_t now, uint32_t ageMs, bool hasCount, bool hasWeight, bool hasDuration) {
+    if (ageMs >= LATE_MS) return;
+    lastValid = true; lastAt = now - ageMs; lastHasCount = hasCount; lastHasWeight = hasWeight; lastHasDuration = hasDuration;
+  }
+  // Counter value already turned into recorded visits: the one to persist.
+  uint32_t committed() const { return pending && pendingCount <= count ? count - pendingCount : count; }
   void onQuerySent(uint32_t now) { queryAt = now; querySeen = true; }
   void onWeight(uint16_t grams, uint32_t now) {
-    weight = grams; weightAt = now; weightSeen = true;
-    if (inQuery(now) || pending) return; // a pending visit reads the latest value when it settles
+    weight = grams; weightAt = now; weightSeen = true; weightFromQuery = inQuery(now);
+    if (weightFromQuery || pending) return; // a pending visit reads the latest value when it settles
     if (lastValid && uint32_t(now - lastAt) < (lastHasWeight ? REPEAT_MS : LATE_MS)) {
-      lastHasWeight = true; push({Event::PatchWeight, 0, grams, 0}); return;
+      lastHasWeight = true; weightSeen = false; push({Event::PatchWeight, 0, grams, 0}); return;
     }
     open(now);
   }
   void onDuration(uint16_t seconds, uint32_t now) {
-    duration = seconds; durationAt = now; durationSeen = true;
-    if (inQuery(now) || pending) return;
+    duration = seconds; durationAt = now; durationSeen = true; durationFromQuery = inQuery(now);
+    if (durationFromQuery || pending) return;
     if (lastValid && uint32_t(now - lastAt) < (lastHasDuration ? REPEAT_MS : LATE_MS)) {
-      lastHasDuration = true; push({Event::PatchDuration, 0, 0, seconds}); return;
+      lastHasDuration = true; durationSeen = false; push({Event::PatchDuration, 0, 0, seconds}); return;
     }
     open(now);
   }
   void onCount(uint32_t total, uint32_t now) {
     if (!haveCount) { haveCount = true; count = total; countDirty = true; return; } // first baseline
     if (total == count) return;
-    uint32_t delta = total > count ? total - count : 0; // a decrease is a counter reset
+    // A decrease means the MCU restarted counting (midnight): all of today's visits are new.
+    uint32_t delta = total > count ? total - count : total;
     count = total; countDirty = true;
     if (!delta) return;
     if (pending) { pendingCount += delta; return; }
     if (lastValid && !lastHasCount && uint32_t(now - lastAt) < LATE_MS) {
-      lastHasCount = true;
+      lastHasCount = true; push({Event::PatchCount, 0, 0, 0});
       if (!--delta) return;
     }
     open(now); pendingCount = delta;
   }
   bool poll(uint32_t now, Event& out) {
+    expire(now);
     if (queued) { out = queue[0]; memmove(queue, queue + 1, sizeof(Event) * --queued); return true; }
     if (!pending || uint32_t(now - openedAt) < SETTLE_MS) return false;
     out.kind = Event::New;
     out.n = pendingCount ? (pendingCount > 1000 ? 1000 : uint16_t(pendingCount)) : 1;
-    out.weightG = (weightSeen && uint32_t(now - weightAt) <= FRESH_MS) ? weight : 0;
-    out.durationS = (durationSeen && uint32_t(now - durationAt) <= FRESH_MS) ? duration : 0;
+    out.weightG = usable(weightSeen, weightAt, weightFromQuery) ? weight : 0;
+    out.durationS = usable(durationSeen, durationAt, durationFromQuery) ? duration : 0;
     lastValid = true; lastAt = now; lastHasCount = pendingCount > 0;
     lastHasWeight = out.weightG > 0; lastHasDuration = out.durationS > 0;
-    pending = false; pendingCount = 0;
+    pending = false; pendingCount = 0; countDirty = true; // the committed count moved
     weightSeen = durationSeen = false; // consumed: never reused for a later visit
     return true;
   }
+  bool lastCounted() const { return lastHasCount; }
 private:
   bool querySeen = false, weightSeen = false, durationSeen = false, pending = false;
+  bool weightFromQuery = false, durationFromQuery = false;
   bool lastValid = false, lastHasCount = false, lastHasWeight = false, lastHasDuration = false;
   uint16_t weight = 0, duration = 0;
   uint32_t queryAt = 0, weightAt = 0, durationAt = 0, openedAt = 0, lastAt = 0, pendingCount = 0;
   Event queue[4];
   size_t queued = 0;
   bool inQuery(uint32_t now) const { return querySeen && uint32_t(now - queryAt) < QUERY_WINDOW_MS; }
+  // A value belongs to the visit if it came at most FRESH_MS before the visit opened, or after it; a
+  // value from a query response only if the visit was opened by that same response.
+  bool usable(bool seen, uint32_t at, bool fromQuery) const {
+    if (!seen) return false;
+    bool fresh = int32_t(at - openedAt) >= 0 || uint32_t(openedAt - at) <= FRESH_MS;
+    return fresh && (!fromQuery || (querySeen && uint32_t(openedAt - queryAt) < QUERY_WINDOW_MS));
+  }
+  // Old timestamps are dropped before millis() wraps (49.7 days) and makes them look recent again.
+  void expire(uint32_t now) {
+    if (lastValid && uint32_t(now - lastAt) >= LATE_MS) lastValid = false;
+    if (pending) return;
+    if (querySeen && uint32_t(now - queryAt) >= QUERY_WINDOW_MS) querySeen = false;
+    if (weightSeen && uint32_t(now - weightAt) > FRESH_MS) weightSeen = false;
+    if (durationSeen && uint32_t(now - durationAt) > FRESH_MS) durationSeen = false;
+  }
   void open(uint32_t now) { pending = true; openedAt = now; pendingCount = 0; }
   void push(const Event& e) { if (queued < 4) queue[queued++] = e; }
 };

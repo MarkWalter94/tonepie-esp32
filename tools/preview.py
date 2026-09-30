@@ -12,6 +12,7 @@ import random
 import re
 import sys
 import time
+import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -79,7 +80,17 @@ LITTER_AT = int(time.time()) - 12 * 86400
 SYNC = {"enabled": True, "url": "http://localhost:8090", "device": "tonepie-demo", "key_set": True,
         "ok_at": int(time.time()) - 120, "error": "", "pending": False}
 MCU = {"online": True, "ready": True, "pending": False, "presence": False, "fault": 0, "lock": False,
-       "auto": True, "wait_min": 0, "odor": True}
+       "auto": True, "wait_min": 0, "odor": True, "armed": False}
+ACTIONS = {"clean", "empty", "auto_on", "auto_off", "bag", "level", "odor_on", "odor_off"}
+
+
+def server_key():
+    """The history server's key from server/.env, as the ESP would have it."""
+    try:
+        env = (ROOT / "server" / ".env").read_text(encoding="utf-8").splitlines()
+        return next((line.split("=", 1)[1].strip() for line in env if line.startswith("TONEPIE_API_KEY=")), "")
+    except OSError:
+        return ""
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -114,12 +125,18 @@ class Handler(BaseHTTPRequestHandler):
                             "armed": False, "pending": False, "command": "Anteprima", "frames": 0, "bad_checksum": 0,
                             "bad_length": 0, "timeouts": 0, "bad_dp": 0, "heap": 0, "uptime_s": 0, "reset_reason": 1,
                             "dps": [], "logs": ["anteprima locale: nessuna MCU"]})
-        elif path == "/api/history":  # relayed to the history server, like the ESP does
-            query = self.path.partition("?")[2]
-            days = parse_qs(query).get("days", ["90"])[0]
+        elif path == "/api/history":  # relayed to the history server with the key, like the ESP does
+            if not SYNC["enabled"] or not SYNC["url"]:
+                return self.send(404, {"message": "Server storico non configurato"})
+            days = parse_qs(self.path.partition("?")[2]).get("days", ["90"])[0]
+            days = str(min(int(days), 3660)) if days.isdigit() else "90"
+            request = urllib.request.Request(f"{SYNC['url']}/api/history?device={SYNC['device']}&days={days}",
+                                             headers={"Authorization": "Bearer " + server_key()})
             try:
-                with urllib.request.urlopen(f"{SYNC['url']}/api/history?device={SYNC['device']}&days={days}", timeout=5) as r:
+                with urllib.request.urlopen(request, timeout=5) as r:
                     self.send(200, r.read())
+            except urllib.error.HTTPError as e:
+                self.send(404 if e.code == 404 else 502, {"message": f"Server storico: HTTP {e.code}"})
             except OSError as e:
                 self.send(502, {"message": f"Server storico non raggiungibile: {e}"})
         elif path.startswith("/mock/"):
@@ -136,10 +153,18 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/config":
             data = json.loads(raw)
             old = STATE["config"]["cats"]
-            for cat in data["cats"]:
+            moved = {}  # old index -> new index, as remapCats does in the firmware
+            for i, cat in enumerate(data["cats"]):
                 index = cat.pop("from", -1)
                 source = old[index] if 0 <= index < len(old) else {}
+                if source:
+                    moved[index] = i
                 cat.update(days=source.get("days", []), grams=source.get("grams", []))
+            for visit in STATE["visits"]:
+                if visit["cat"] >= 0:
+                    visit["cat"] = moved.get(visit["cat"], -1)
+                    if visit["cat"] < 0:
+                        visit["manual"] = False
             STATE["config"] = {"cats": data["cats"], "tolerance_g": data["tolerance_g"],
                                "bin_limit_visits": data["bin_limit_visits"]}
             self.send(200, {"message": "Impostazioni salvate"})
@@ -157,6 +182,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.send(404, {"message": "Visita non trovata"})
             elif form.get("cat") == "delete":
                 STATE["visits"].remove(visit)
+                if not (visit["t"] and STATE["bin"]["since"] and visit["t"] < STATE["bin"]["since"]):
+                    STATE["bin"]["visits"] = max(0, STATE["bin"]["visits"] - 1)
                 self.send(200, {"message": "Visita eliminata"})
             else:
                 visit.update(cat=int(form["cat"]), manual=True)
@@ -166,9 +193,18 @@ class Handler(BaseHTTPRequestHandler):
             SYNC.update(enabled=form.get("enabled") == "1", url=form.get("url", ""),
                         key_set=SYNC["key_set"] or bool(form.get("key")))
             self.send(200, {"message": "Impostazioni del server salvate"})
+        elif path == "/api/arm":
+            MCU["armed"] = parse_qs(raw).get("enabled", ["0"])[0] == "1"
+            self.send(200, {"message": "Invii abilitati" if MCU["armed"] else "Invii disabilitati"})
         elif path in ("/api/command", "/api/value"):
             form = {k: v[0] for k, v in parse_qs(raw).items()}
             action = form.get("action", "")
+            if not MCU["armed"]:
+                return self.send(409, {"message": "Abilita gli invii dalla dashboard"})
+            if path == "/api/command" and action not in ACTIONS:
+                return self.send(400, {"message": "Comando non ammesso"})
+            if path == "/api/value" and not (form.get("dp") in ("117", "118") and form.get("value", "").isdigit()):
+                return self.send(400, {"message": "Intervallo valido: DP117 0-60; DP118 0-120 minuti"})
             if action.startswith("auto_"):
                 MCU["auto"] = action == "auto_on"
             elif action.startswith("odor_"):
