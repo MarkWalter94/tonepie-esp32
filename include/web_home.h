@@ -155,6 +155,11 @@ details{margin-top:14px}summary{cursor:pointer;font-weight:700;color:var(--muted
 .drow:last-child{border:0}.drow span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.drow.zero{color:var(--muted)}
 .drow i{display:block;height:10px;border-radius:5px;background:var(--c);min-width:3px}.drow.zero i{background:var(--line)}
 .drow b{text-align:right;font-variant-numeric:tabular-nums}
+/* sync panel */
+.srcnote{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;flex-wrap:wrap}
+.srcnote p{flex:1;min-width:180px}
+.srow{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid var(--line);font-size:14px}.srow span{color:var(--muted)}.srow b{text-align:right;overflow-wrap:anywhere}
+.vlist{margin-top:8px}.vlist .visit{cursor:default}.unsent{color:var(--warn);font-weight:700}
 /* history from the server */
 .chips{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 4px}
 .chip{display:flex;align-items:center;gap:8px;background:var(--soft);border-radius:14px;padding:8px 12px;font-size:13px;min-width:0}
@@ -215,6 +220,9 @@ details{margin-top:14px}summary{cursor:pointer;font-weight:700;color:var(--muted
 <dialog id="dlgCat"><div class="sheet"><div class="cat-head" id="catHead"></div><div class="stats" id="catStats"></div><div id="catDays"></div>
   <p class="muted small" id="catNote" style="margin-top:10px"></p>
   <div class="actions"><button class="btn ghost" data-close data-t="close"></button></div></div></dialog>
+<dialog id="dlgSync"><div class="sheet"><h2 data-t="syncTitle"></h2><p id="syncSub"></p>
+  <div class="stats" id="syncStats"></div><div id="syncRows"></div><div id="syncList"></div>
+  <div class="actions"><button class="btn ghost" data-close data-t="close"></button><button class="btn primary" id="syncNow" data-t="sendNow"></button></div></div></dialog>
 <dialog id="dlgConfirm"><div class="sheet"><h2 id="cfTitle"></h2><p id="cfText"></p>
   <div class="actions"><button class="btn ghost" data-close data-t="cancel"></button><button class="btn primary" id="cfOk"></button></div></div></dialog>
 <div id="toast" role="status" aria-live="polite"></div>
@@ -253,7 +261,12 @@ it:{title:'Lettiera',settings:'Impostazioni',binTitle:'CASSETTO',trend:'Andament
   syncOk:a=>'Ultimo invio '+a,syncPending:'Invio in corso…',syncErr:e=>'Invio dei nuovi dati non riuscito ('+e+')',syncOff:'Disattivato',syncNever:'Nessun invio ancora',
   histLoading:'Carico lo storico…',histError:u=>'Server storico non raggiungibile ('+u+'). Controlla che sia acceso.',histEmpty:'Sul server non ci sono ancora visite.',
   perDay2:'al giorno',weekOf:d=>'Settimana del '+d,bagsLine:(n,d,v)=>plural(n,'cambio sacchetto','cambi sacchetto')+(d?' · in media '+(d===1?'ogni giorno':'ogni '+d+' giorni'):'')+(v?' · circa '+plural(v,'visita','visite')+' per sacchetto':''),
-  months:'Per mese',month:'Mese',fromServer:'Include i dati del server storico.',serverUrl:'Indirizzo del server storico',
+  months:'Per mese',month:'Mese',fromServer:'Include i dati del server storico.',syncTitle:'Invio al server storico',sendNow:'Invia ora',syncPanel:'Invio dati',
+  srcLocal:(n,d)=>'Solo dati in memoria: '+plural(n,'visita','visite')+(d?' dal '+d:'')+'.',srcOffline:'Server storico spento. ',srcServer:'Dati del server più quelli non ancora inviati.',
+  sentN:'inviate',unsentN:'da inviare',delN:'eliminazioni da comunicare',otherPending:'Altre modifiche (gatti, cassetto, lettiera) in attesa di invio.',
+  lastTry:'Ultimo tentativo',lastOk:'Ultimo invio riuscito',nextTry:'Prossimo tentativo',inSec:n=>n<=0?'a breve':n<60?'tra '+n+' s':'tra '+Math.round(n/60)+' min',sendingNow:'in corso',never:'mai',server:'Server',
+  unsentList:'Visite non ancora inviate',sentList:n=>'Visite già inviate ('+n+')',allSent:'Tutte le visite sono sul server.',notSent:'non inviata',noTime:'senza orario',
+  forced:'Invio richiesto…',forcedOk:'Dati inviati al server',forcedErr:e=>'Invio non riuscito: '+e,serverUrl:'Indirizzo del server storico',
   waitSeq:'Attendi: sto già inviando comandi alla lettiera',unknownOutcome:'Collegamento perso: esito sconosciuto. Controlla la lettiera prima di riprovare.',srvWait:'Server storico non raggiungibile: per ora vedi solo i dati della lettiera.',unknownCats:'Non riconosciuti',
   letters:['D','L','M','M','G','V','S'],locale:'it-IT',other:'EN',otherName:'Switch to English'},
 en:{title:'Litter box',settings:'Settings',binTitle:'BIN',trend:'Weight trend',period:'Period',d30:'30 d',d90:'90 d',showValues:'Show values',recent:'Recent visits',
@@ -287,7 +300,12 @@ en:{title:'Litter box',settings:'Settings',binTitle:'BIN',trend:'Weight trend',p
   syncOk:a=>'Last sent '+a,syncPending:'Sending…',syncErr:e=>'Sending new data failed ('+e+')',syncOff:'Off',syncNever:'Nothing sent yet',
   histLoading:'Loading history…',histError:u=>'History server unreachable ('+u+'). Check that it is running.',histEmpty:'No visits on the server yet.',
   perDay2:'per day',weekOf:d=>'Week of '+d,bagsLine:(n,d,v)=>plural(n,'bag change','bag changes')+(d?' · '+(d===1?'every day':'every '+d+' days')+' on average':'')+(v?' · about '+plural(v,'visit','visits')+' per bag':''),
-  months:'By month',month:'Month',fromServer:'Includes data from the history server.',serverUrl:'History server address',
+  months:'By month',month:'Month',fromServer:'Includes data from the history server.',syncTitle:'Sending to the history server',sendNow:'Send now',syncPanel:'Data upload',
+  srcLocal:(n,d)=>'Litter box memory only: '+plural(n,'visit','visits')+(d?' since '+d:'')+'.',srcOffline:'History server off. ',srcServer:'Server data plus what has not been sent yet.',
+  sentN:'sent',unsentN:'to send',delN:'deletions to report',otherPending:'Other changes (cats, bin, litter) waiting to be sent.',
+  lastTry:'Last attempt',lastOk:'Last successful upload',nextTry:'Next attempt',inSec:n=>n<=0?'shortly':n<60?'in '+n+' s':'in '+Math.round(n/60)+' min',sendingNow:'in progress',never:'never',server:'Server',
+  unsentList:'Visits not sent yet',sentList:n=>'Visits already sent ('+n+')',allSent:'All visits are on the server.',notSent:'not sent',noTime:'no time',
+  forced:'Sending requested…',forcedOk:'Data sent to the server',forcedErr:e=>'Sending failed: '+e,serverUrl:'History server address',
   waitSeq:'Please wait: commands are already being sent to the litter box',unknownOutcome:'Connection lost: result unknown. Check the litter box before trying again.',srvWait:'History server unreachable: showing only the litter box’s own data for now.',unknownCats:'Not recognised',
   letters:['S','M','T','W','T','F','S'],locale:'en-GB',other:'IT',otherName:'Passa all’italiano'}};
 let LANG=(()=>{try{const l=localStorage.getItem('lang');if(TEXT[l])return l}catch(e){}return /^it\b/i.test(navigator.language||'')?'it':'en'})();
@@ -378,7 +396,7 @@ function render(){
   let day='';for(const v of vis.slice(0,showAll?64:10)){const d=dayLabel(v.t);if(d!==day){day=d;list.append(h('p',{class:'day'},d))}
     const c=v.cat>=0?cats[v.cat]:null;
     list.append(h('button',{class:'visit',onclick:()=>openVisit(v)},avatar(c?c.color:null,'sm'),
-      h('div',{class:'who'},h('b',{},c?c.name:t('notRecognised')),h('span',{},[v.g?kg(v.g):null,v.s?dur(v.s):null].filter(Boolean).join(' · ')||t('noData'))),
+      h('div',{class:'who'},h('b',{},c?c.name:t('notRecognised')),h('span',{},[v.g?kg(v.g):null,v.s?dur(v.s):null].filter(Boolean).join(' · ')||t('noData'),syncOn()&&!v.sent?h('span',{class:'unsent'},' · '+t('notSent')):null)),
       v.t?h('time',{},clock(v.t)):null))}
   if(vis.length>10)list.append(h('button',{class:'btn ghost block',style:'padding:10px',onclick:()=>{showAll=!showAll;render()}},showAll?t('showLess'):t('showAll',vis.length)));
   $('cleanWrap').hidden=false;$('bag').disabled=$('litter').disabled=busy;$('saveBtn').disabled=busy;
@@ -387,6 +405,7 @@ function render(){
   $('clean').disabled=busy||!m.ready||!!m.presence||!!m.fault||!!m.lock||m.pending;
   $('foot').replaceChildren('Firmware '+S.firmware+' · ',h('a',{href:'/dev'},t('devPage')));drawTrend();drawHist();
   if($('dlgCat').open)openCat(openCat.i);
+  if($('dlgSync').open)drawSync();
 }
 // Visits of one cat per local day, from today back to the oldest visit kept (at least a week).
 function openCat(i){
@@ -430,14 +449,68 @@ function histFetch(days){
   })());
 }
 function syncText(){const y=S.sync;return !y.enabled?t('syncOff'):y.error?t('syncErr',y.error)+(y.ok_at?' · '+t('syncOk',ago(y.ok_at)).toLowerCase():''):y.pending?t('syncPending'):y.ok_at?t('syncOk',ago(y.ok_at)):t('syncNever')}
+// History from the litter box's own memory (its last 64 visits), aggregated like the server does.
+function localHist(days){
+  const cats=S.config.cats,map={},from=days?dayStart(days-1):0;
+  for(const v of S.visits){if(!v.t||v.t<from)continue;const k=dateKey(v.t),d=map[k]||(map[k]={d:k,v:{},w:{},n:{}});
+    const n=v.cat>=0&&cats[v.cat]?cats[v.cat].name:'';d.v[n]=(d.v[n]||0)+1;if(n&&v.g){d.w[n]=(d.w[n]||0)+v.g;d.n[n]=(d.n[n]||0)+1}}
+  const list=Object.values(map).sort((a,b)=>a.d<b.d?-1:1).map(d=>{const w={};for(const n in d.w)w[n]=Math.round(d.w[n]/d.n[n]);return{d:d.d,v:d.v,w}});
+  const timed=S.visits.filter(v=>v.t&&v.t>=from).map(v=>v.t);
+  return{days:list,bags:S.bin.since&&S.bin.since>=from?[S.bin.since]:[],litter:[],cats:[],firstVisit:timed.length?Math.min(...timed):0,count:timed.length};
+}
+// Per day and cat the larger count: the server lacks what was not sent yet, the memory what it no longer holds.
+function mergeHist(srv,loc){
+  const map={};for(const d of srv.days)map[d.d]={d:d.d,v:{...d.v},w:{...d.w}};
+  for(const d of loc.days){const m=map[d.d]||(map[d.d]={d:d.d,v:{},w:{}});
+    for(const n in d.v)if(d.v[n]>(m.v[n]||0)){m.v[n]=d.v[n];if(d.w[n])m.w[n]=d.w[n]}}
+  return{...srv,days:Object.values(map).sort((a,b)=>a.d<b.d?-1:1),bags:[...new Set([...srv.bags,...loc.bags])].sort((a,b)=>a-b)};
+}
+function srcNote(src,H){
+  const first=H.firstVisit?new Date(H.firstVisit*1000).toLocaleDateString(t('locale'),{day:'numeric',month:'short'}):'';
+  const text=src==='server'?t('srcServer'):src==='offline'?t('srcOffline')+t('srcLocal',H.count,first):t('srcLocal',H.count,first);
+  return h('div',{class:'srcnote'},h('p',{class:'muted small'},text,syncOn()?h('br'):null,syncOn()?syncText():null),
+    syncOn()?h('button',{class:'btn',onclick:openSync},t('syncPanel')):null);
+}
+// Upload panel: what reached the server and what did not, and a button to send now.
+function drawSync(){
+  const y=S.sync,cats=S.config.cats,all=S.visits;
+  const unsent=all.filter(v=>!v.sent),sent=all.length-unsent.length;
+  $('syncSub').textContent=syncText();
+  $('syncStats').replaceChildren(...[h('div',{},h('b',{},String(sent)),h('span',{},t('sentN'))),h('div',{},h('b',{class:unsent.length?'unsent':''},String(unsent.length)),h('span',{},t('unsentN'))),
+    y.deleted?h('div',{},h('b',{},String(y.deleted)),h('span',{},t('delN'))):null].filter(Boolean));
+  const when=s=>s?ago(s)+' · '+dayLabel(s)+t('at',clock(s)):t('never');
+  $('syncRows').replaceChildren(...[h('div',{class:'srow'},h('span',{},t('server')),h('b',{},y.url)),
+    h('div',{class:'srow'},h('span',{},t('lastTry')),h('b',{},when(y.try_at))),
+    h('div',{class:'srow'},h('span',{},t('lastOk')),h('b',{},when(y.ok_at))),
+    h('div',{class:'srow'},h('span',{},t('nextTry')),h('b',{},y.busy?t('sendingNow'):y.pending||y.error?t('inSec',y.next_s):'—')),
+    y.dirty&&!unsent.length&&!y.deleted?h('p',{class:'muted small',style:'margin-top:8px'},t('otherPending')):null].filter(Boolean));
+  const row=v=>{const c=v.cat>=0?cats[v.cat]:null;return h('div',{class:'visit'},avatar(c?c.color:null,'sm'),
+    h('div',{class:'who'},h('b',{},c?c.name:t('notRecognised')),h('span',{},v.t?dayLabel(v.t)+t('at',clock(v.t)):t('noTime'))),v.g?h('time',{},kg(v.g)):null)};
+  $('syncList').replaceChildren(...[h('h3',{class:'sub'},unsent.length?t('unsentList'):t('allSent')),h('div',{class:'vlist'},unsent.map(row)),
+    sent?h('details',{},h('summary',{},t('sentList',sent)),h('div',{class:'vlist'},all.filter(v=>v.sent).map(row))):null].filter(Boolean));
+  $('syncNow').disabled=!!y.busy||!y.enabled||busy||syncNowBusy;
+}
+let syncNowBusy=false;
+function openSync(){drawSync();$('dlgSync').showModal()}
+$('syncNow').onclick=async()=>{
+  const before=S.sync.try_at;syncNowBusy=true;$('syncNow').disabled=true;toast(t('forced'));
+  try{
+    const r=await api('/api/sync/now');if(!r.ok){toast(r.message);return}
+    // Wait for the attempt to finish: the ESP answers within a few seconds, or gives up after about 10.
+    for(let i=0;i<15;i++){await sleep(1500);await refresh();if(S.sync.try_at!==before&&!S.sync.busy)break}
+    toast(S.sync.error?t('forcedErr',S.sync.error):t('forcedOk'));
+    for(const k in histFail)delete histFail[k];drawHist.sig='';lastKey='';await refresh();
+  }finally{syncNowBusy=false;if($('dlgSync').open)drawSync()}
+};
 async function drawHist(){
-  const card=$('hist'),body=$('histBody');card.hidden=!syncOn();if(card.hidden){drawHist.sig='';return}
-  const days=histRange;if(!histCache[days]&&!histFail[days])body.replaceChildren(h('p',{class:'empty'},t('histLoading')));
-  let H;try{H=await histFetch(days)}catch(e){
-    const sig='err|'+LANG+'|'+syncText();if(drawHist.sig!==sig){drawHist.sig=sig;body.replaceChildren(h('p',{class:'empty'},t('histError',S.sync.url)),h('p',{class:'muted small'},syncText()))}return}
+  const card=$('hist'),body=$('histBody');card.hidden=!S.visits.length&&!syncOn();if(card.hidden){drawHist.sig='';return}
+  const days=histRange;if(syncOn()&&!histCache[days]&&!histFail[days]&&!drawHist.sig)body.replaceChildren(h('p',{class:'empty'},t('histLoading')));
+  // The server when it answers, merged with the visits it has not received yet; otherwise the litter box's memory.
+  let H,src='server';
+  if(syncOn()){try{H=mergeHist(await histFetch(days),localHist(days))}catch(e){H=localHist(days);src='offline'}}else{H=localHist(days);src='local'}
   if(days!==histRange)return;
   // Redrawn only when something shown changes, so an open table or a selected bar survive the 5 s refresh.
-  const sig=[histCache[days].at,days,$('histBody').clientWidth,LANG,COLORS[0],JSON.stringify(S.config.cats.map(c=>[c.name,c.color])),syncText()].join('|');
+  const sig=[src,histCache[days]?.at,days,$('histBody').clientWidth,LANG,COLORS[0],JSON.stringify(S.config.cats.map(c=>[c.name,c.color])),S.visits.map(v=>v.id+':'+v.cat).join(),syncText()].join('|');
   if(drawHist.sig===sig)return;drawHist.sig=sig;
   // Series: current cats first (their colours), then cats removed since, then unrecognised visits.
   const cats=S.config.cats,names=cats.map(c=>c.name);
@@ -446,7 +519,7 @@ async function drawHist(){
   const free=COLORS.filter((x,k)=>!cats.some(c=>c.color%6===k));let nf=0;
   const series=names.map(n=>{const c=cats.find(x=>x.name===n);return{n,label:n,color:c?COLORS[c.color%6]:free[nf++%Math.max(1,free.length)]||'var(--muted)'}});
   if(H.days.some(d=>d.v['']))series.push({n:'',label:t('unknownCats'),color:'var(--muted)'});
-  if(!H.days.length){body.replaceChildren(h('p',{class:'empty'},t('histEmpty')),h('p',{class:'muted small'},syncText()));return}
+  if(!H.days.length){body.replaceChildren(h('p',{class:'empty'},t('histEmpty')),srcNote(src,H));return}
   const today=parseDay(dateKey(Date.now()/1000)),first=days?new Date(today.getFullYear(),today.getMonth(),today.getDate()-days+1):parseDay(H.days[0].d);
   const span=Math.max(1,Math.round((today-first)/864e5)+1),monthly=span>200;
   // Buckets: weeks starting on Monday, or months over long spans.
@@ -487,7 +560,7 @@ async function drawHist(){
   body.append(h('details',{open:histOpen||null,ontoggle:e=>histOpen=e.target.open},h('summary',{},t('months')),h('table',{},h('tr',{},h('th',{},t('month')),named.map(s=>h('th',{},s.label))),
     Object.keys(months).sort().reverse().map(m=>h('tr',{},h('td',{},parseDay(m+'-01').toLocaleDateString(t('locale'),{month:'short',year:'numeric'})),
       named.map(s=>{const r=months[m],c=r.v[s.n]||0;return h('td',{},c?c+(r.wn[s.n]?' · '+num(r.w[s.n]/r.wn[s.n]/1000,1)+' kg':''):'—')}))))),
-    h('p',{class:'muted small',style:'margin-top:8px'},syncText()));
+    srcNote(src,H));
 }
 document.querySelectorAll('[data-hist]').forEach(b=>b.onclick=()=>{histRange=+b.dataset.hist;histSel=null;document.querySelectorAll('[data-hist]').forEach(o=>o.setAttribute('aria-pressed',String(o===b)));drawHist()});
 // Weight log days are local days numbered like epoch days: shown with timeZone UTC so no shift is applied twice.
@@ -535,7 +608,8 @@ document.querySelectorAll('[data-range]').forEach(b=>b.onclick=()=>{range=+b.dat
 let resizeTimer;addEventListener('resize',()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(()=>{if(S){drawTrend();drawHist()}},200)});
 async function refresh(){
   try{const r=await fetch('/api/home',{cache:'no-store',headers:{'X-Tonepie-Lang':LANG}});if(!r.ok)throw 0;const s=await r.json();token=s.token;S=s;
-    const key=JSON.stringify([s.mcu,s.config,s.bin,s.visits,s.sync,s.litter_at,Math.floor(Date.now()/60000)]);if(key!==lastKey){lastKey=key;render()}}
+    const key=JSON.stringify([s.mcu,s.config,s.bin,s.visits,{...s.sync,next_s:0},s.litter_at,Math.floor(Date.now()/60000)]);if(key!==lastKey){lastKey=key;render()}
+    else if($('dlgSync').open)drawSync()}
   catch(e){lastKey='';setStatus('',t('unreachable'));$('clean').disabled=true}
 }
 function openVisit(v){

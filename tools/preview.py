@@ -54,7 +54,8 @@ def demo():
     while t > now - 12 * 86400:
         cat = random.choice([0, 0, 1, 1, 1, -1] if len(visits) == 3 else [0, 1])
         grams = 0 if cat < 0 else cats[cat]["weight_g"] + random.choice([-100, 0, 0, 100])
-        visits.append({"id": vid, "t": t, "g": grams, "s": random.randint(35, 160), "cat": cat, "manual": False})
+        visits.append({"id": vid, "t": t, "g": grams, "s": random.randint(35, 160), "cat": cat, "manual": False,
+                       "sent": t < now - 3 * 3600})
         vid -= 1
         t -= random.randint(2 * 3600, 7 * 3600)
     today = now // 86400
@@ -78,7 +79,8 @@ STATE = demo()
 LITTER_AT = int(time.time()) - 12 * 86400
 # History server shown by the page: run the server (server/) and fill it with tools/demo_history.py.
 SYNC = {"enabled": True, "url": "http://localhost:8090", "device": "tonepie-demo", "key_set": True,
-        "ok_at": int(time.time()) - 120, "error": "", "pending": False}
+        "ok_at": int(time.time()) - 3 * 3600, "error": "connessione rifiutata", "pending": True, "busy": False,
+        "try_at": int(time.time()) - 200, "deleted": 1, "dirty": True, "next_s": 100}
 MCU = {"online": True, "ready": True, "pending": False, "presence": False, "fault": 0, "lock": False,
        "auto": True, "wait_min": 0, "odor": True, "armed": False}
 ACTIONS = {"clean", "empty", "auto_on", "auto_off", "bag", "level", "odor_on", "odor_off"}
@@ -193,6 +195,16 @@ class Handler(BaseHTTPRequestHandler):
             SYNC.update(enabled=form.get("enabled") == "1", url=form.get("url", ""),
                         key_set=SYNC["key_set"] or bool(form.get("key")))
             self.send(200, {"message": "Impostazioni del server salvate"})
+        elif path == "/api/sync/now":  # one attempt: succeeds if the history server answers /health
+            try:
+                urllib.request.urlopen(SYNC["url"] + "/health", timeout=3).close()
+                for visit in STATE["visits"]:
+                    visit["sent"] = True
+                SYNC.update(ok_at=int(time.time()), error="", pending=False, deleted=0, dirty=False, next_s=0)
+            except OSError:
+                SYNC.update(error="connessione rifiutata", pending=True, next_s=300)
+            SYNC["try_at"] = int(time.time())
+            self.send(202, {"message": "Invio in corso"})
         elif path == "/api/arm":
             MCU["armed"] = parse_qs(raw).get("enabled", ["0"])[0] == "1"
             self.send(200, {"message": "Invii abilitati" if MCU["armed"] else "Invii disabilitati"})

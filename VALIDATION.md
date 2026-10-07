@@ -63,6 +63,13 @@ Ai-Thinker ESP-C3-13-Kit (ESP32-C3 rev 0.3, CH340 on COM6), Tonepie Ti Pro 25 ma
 - Firmware: key kept only for the same server address; history relay with the key, short timeouts and an 8 s deadline; deletions and a send "generation" kept consistent across restarts and setting changes; network state to the MCU retried 3 times then once a minute; DP126 no longer reported as "result unknown"; weight chart on local days; smaller JSON buffers. Updated over the air: MCU handshake clean (0 frame errors), one network-state frame at boot, sync working.
 - Server: 20 tests (concurrency, nulls, id wrap and restart, DST with a fake clock, read authentication, body limit, pending model changes for all three providers). Named Docker volume (the old `./data` file was copied into it: no data lost), health check, no CORS, key required for reads.
 
+## 7 October 2026
+
+### 1.11.0 — upload panel, history without the server
+
+- Each visit records whether this version of it reached the server (changed visits are sent again); last successful upload kept across restarts; `POST /api/sync/now`.
+- Tested on the real unit with the server container stopped: History card from memory (64 visits), Send now reported "connessione rifiutata"; container started again: Send now uploaded, 64 sent / 0 to send, history merged.
+
 ## Not tested yet
 
 - Any physical command from this firmware: clean (101), empty (102), level litter (126), bag change (127), and the writes to 105/117/118/129.

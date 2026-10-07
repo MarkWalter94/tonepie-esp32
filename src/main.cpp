@@ -63,7 +63,7 @@ uint32_t wifiSeen=0;
 // The POST runs in its own task so a slow or absent server never delays the MCU.
 bool syncOn=false,syncDirty=true;
 String syncUrl,syncKey,deviceId;
-uint32_t syncLastTry=0,syncOkAt=0,syncFails=0,wifiUpAt=0,syncGen=0,syncTaskGen=0;
+uint32_t syncLastTry=0,syncTryAt=0,syncOkAt=0,syncFails=0,wifiUpAt=0,syncGen=0,syncTaskGen=0;
 int syncErrCode=0; // 0 = none, <0 HTTPClient error, >0 HTTP status
 struct DeletedRef { uint16_t id; uint32_t epoch; };
 struct DeletedList { uint8_t count; DeletedRef refs[16]; } deleted{}; // reported until the server has seen them; kept in NVS
@@ -109,6 +109,8 @@ uint16_t localDay(uint32_t epoch) { return epoch?uint16_t((epoch+utcOffset(epoch
 void saveDeleted() { prefs.putBytes("deleted",&deleted,sizeof(deleted)); }
 void saveCats() { prefs.putBytes("cats",&cats,sizeof(cats));syncDirty=true; }
 void saveVisits() { prefs.putBytes("visits",&history,sizeof(history));prefs.putBytes("bin",&bin,sizeof(bin));syncDirty=true; }
+// Only the upload bookkeeping changed: nothing new to send.
+void saveVisitFlags() { prefs.putBytes("visits",&history,sizeof(history)); }
 void loadStore() {
   prefs.begin("litter",false);
   Litter::defaults(cats);memset(&history,0,sizeof(history));
@@ -125,6 +127,7 @@ void loadStore() {
   litterAt=prefs.getUInt("litterAt",0);
   wifiSsid=prefs.getString("ssid",Config::WIFI_SSID);wifiPassword=prefs.getString("wpass",Config::WIFI_PASSWORD);
   syncOn=prefs.getBool("syncOn",false);syncUrl=prefs.getString("syncUrl","");syncKey=prefs.getString("syncKey","");
+  syncOkAt=prefs.getUInt("syncOkAt",0);
 }
 // A recognised weight feeds the trend chart and moves the cat's reference weight.
 void learnWeight(int8_t cat,uint16_t grams,uint32_t epoch) {
@@ -188,6 +191,7 @@ void serviceTracker(uint32_t now) {
     // Patches belong to the tracker's last visit: gone if it was deleted meanwhile.
     Litter::Visit* v=Litter::find(history,trackerVisitId);
     if(!v)continue;
+    Litter::touch(*v);
     if(e.kind==Litter::Event::PatchCount)v->flags|=Litter::VISIT_COUNTED;
     else if(e.kind==Litter::Event::PatchDuration)v->durationS=e.durationS;
     else{
@@ -420,7 +424,10 @@ void serviceSync(uint32_t now){
     syncDone=false;int code=syncCode;
     if(syncTaskGen!=syncGen){syncDirty=true;} // settings changed meanwhile: that answer came from the old server
     else if(code>=200 && code<300){
-      syncOkAt=epochNow();syncFails=0;syncErrCode=0;
+      syncOkAt=epochNow();syncFails=0;syncErrCode=0;prefs.putUInt("syncOkAt",syncOkAt);
+      // Visits unchanged since the snapshot was built are now on the server.
+      for(int i=0;i<history.count;i++){auto& v=history.v[i];if(v.flags&Litter::VISIT_SENDING)v.flags=(v.flags&~Litter::VISIT_SENDING)|Litter::VISIT_SYNCED;}
+      saveVisitFlags();
       // Deletions reported in this snapshot are now on the server; newer ones stay queued.
       if(deletedSent){memmove(deleted.refs,deleted.refs+deletedSent,(deleted.count-deletedSent)*sizeof(DeletedRef));deleted.count-=deletedSent;saveDeleted();}
     }else{
@@ -428,13 +435,15 @@ void serviceSync(uint32_t now){
       if(syncFails==1)logLine("Server storico: invio fallito, "+syncErrorText(code,false));
     }
     deletedSent=0;
+    for(int i=0;i<history.count;i++)history.v[i].flags&=~Litter::VISIT_SENDING; // failed or kept above as synced
   }
   if(!syncOn || syncUrl.isEmpty() || syncKey.isEmpty() || WiFi.status()!=WL_CONNECTED || !clockSynced())return;
   if(uint32_t(now-wifiUpAt)<10000)return; // right after connecting the first request often fails
   // Changes go out within seconds; otherwise a heartbeat every 15 min. Failures: 30 s, doubling up to 5 min.
   uint32_t wait=syncFails?min(300000u,15000u<<min(syncFails,uint32_t(5))):(syncDirty?3000u:900000u);
   if(syncLastTry && uint32_t(now-syncLastTry)<wait)return;
-  syncLastTry=now;if(!syncLastTry)syncLastTry=1;syncDirty=false;
+  syncLastTry=now;if(!syncLastTry)syncLastTry=1;syncDirty=false;syncTryAt=epochNow();
+  for(int i=0;i<history.count;i++){auto& v=history.v[i];if(!(v.flags&Litter::VISIT_SYNCED))v.flags|=Litter::VISIT_SENDING;}
   syncBody=snapshotJson();deletedSent=deleted.count;syncTaskGen=syncGen;
   syncTarget=syncUrl+"/api/ingest";syncAuth="Bearer "+syncKey;
   syncBusy=true;xTaskNotifyGive(syncTask);
@@ -483,7 +492,8 @@ void syncApi(){
   if(on && key.isEmpty() && !url.isEmpty() && url!=syncUrl){reply(400,"Nuovo indirizzo: inserisci di nuovo la chiave","New address: enter the key again");return;}
   if(on && (url.isEmpty() || key.isEmpty())){reply(400,"Per attivarlo servono indirizzo e chiave","Address and key are needed to enable it");return;}
   syncOn=on;syncUrl=url;syncKey=key;prefs.putBool("syncOn",on);prefs.putString("syncUrl",url);prefs.putString("syncKey",key);
-  syncDirty=true;syncFails=0;syncLastTry=0;syncErrCode=0;syncOkAt=0;syncGen++;
+  syncDirty=true;syncFails=0;syncLastTry=0;syncErrCode=0;syncOkAt=0;prefs.putUInt("syncOkAt",0);syncGen++;
+  for(int i=0;i<history.count;i++)Litter::touch(history.v[i]); // another server has none of them
   logLine(String("Server storico ")+(on?"attivo: "+url:"disattivato"));
   reply(200,"Impostazioni del server salvate","Server settings saved");
 }
@@ -512,10 +522,13 @@ void homeApi(){
   JsonObject sync=doc.createNestedObject("sync");
   sync["enabled"]=syncOn;sync["url"]=syncUrl;sync["device"]=deviceId;sync["key_set"]=!syncKey.isEmpty();
   sync["ok_at"]=syncOkAt;sync["error"]=syncErrorText(syncErrCode,english());sync["pending"]=syncOn&&(syncDirty||syncBusy);
+  sync["busy"]=bool(syncBusy);sync["try_at"]=syncTryAt;sync["deleted"]=deleted.count;sync["dirty"]=bool(syncDirty);
+  uint32_t backoff=syncFails?min(300000u,15000u<<min(syncFails,uint32_t(5))):(syncDirty?3000u:900000u);
+  sync["next_s"]=syncOn&&syncLastTry?(uint32_t(millis()-syncLastTry)>=backoff?0:(backoff-uint32_t(millis()-syncLastTry))/1000):0;
   JsonObject b=doc.createNestedObject("bin");b["since"]=bin.since;b["visits"]=bin.visits;
   JsonArray visitArray=doc.createNestedArray("visits"); // newest first
   for(int i=int(history.count)-1;i>=0;i--){const auto& v=history.v[i];auto j=visitArray.createNestedObject();
-    j["id"]=v.id;j["t"]=v.epoch;j["g"]=v.weightG;j["s"]=v.durationS;j["cat"]=v.cat;j["manual"]=(v.flags&Litter::VISIT_MANUAL)!=0;}
+    j["id"]=v.id;j["t"]=v.epoch;j["g"]=v.weightG;j["s"]=v.durationS;j["cat"]=v.cat;j["manual"]=(v.flags&Litter::VISIT_MANUAL)!=0;j["sent"]=(v.flags&Litter::VISIT_SYNCED)!=0;}
   if(doc.overflowed()){reply(503,"Memoria insufficiente","Not enough memory");return;}
   String body;serializeJson(doc,body);server.sendHeader("Cache-Control","no-store");server.send(200,"application/json",body);
 }
@@ -550,6 +563,7 @@ void configApi(){
     if((a>b?a-b:b-a)<Litter::MIN_GAP_G){reply(400,"Due gatti hanno quasi lo stesso peso: non potrei distinguerli","Two cats have almost the same weight: they could not be told apart");return;}
   }
   Litter::remapCats(history,weights,weightScratch,from,next.catCount);
+  for(int i=0;i<history.count;i++)Litter::touch(history.v[i]); // names or numbering may have changed
   cats=next;Litter::rematch(cats,history);saveCats();saveVisits();prefs.putBytes("weights",&weights,sizeof(weights));
   reply(200,"Impostazioni salvate","Settings saved");
 }
@@ -574,7 +588,7 @@ void visitApi(){
     uint32_t distance=v->weightG>reference?v->weightG-reference:reference-v->weightG;
     if(changed && distance<=2u*cats.toleranceG)learnWeight(v->cat,v->weightG,v->epoch);
   }else{reply(400,"Gatto non valido","Invalid cat");return;}
-  v->flags|=Litter::VISIT_MANUAL;saveVisits();reply(200,"Visita aggiornata","Visit updated");
+  Litter::touch(*v);v->flags|=Litter::VISIT_MANUAL;saveVisits();reply(200,"Visita aggiornata","Visit updated");
 }
 void page(const char* html){
   if(!allowedHost()){reply(403,"Host non ammesso","Host not allowed");return;}
@@ -602,6 +616,10 @@ void setupWeb(){
   server.on("/api/visit",HTTP_POST,visitApi);
   server.on("/api/sync",HTTP_POST,syncApi);
   server.on("/api/history",HTTP_GET,historyApi);
+  // "Send now" from the home page: skips the back-off after failures.
+  server.on("/api/sync/now",HTTP_POST,[]{if(!protect())return;
+    if(!syncOn){reply(409,"Invio al server disattivato","Sending to the server is off");return;}
+    syncFails=0;syncLastTry=0;syncDirty=true;reply(202,"Invio in corso","Sending");});
   server.on("/api/litter",HTTP_POST,[]{if(!protect())return;litterAt=epochNow();prefs.putUInt("litterAt",litterAt);syncDirty=true;reply(200,"Aggiunta di lettiera registrata","Litter top-up recorded");});
   server.on("/api/bin/reset",HTTP_POST,[]{if(!protect())return;bin.visits=0;bin.since=epochNow();saveVisits();reply(200,"Cassetto svuotato: conteggio azzerato","Bin emptied: count reset");});
   server.on("/api/arm",HTTP_POST,[]{if(!protect())return;

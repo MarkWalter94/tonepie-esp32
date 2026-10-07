@@ -11,6 +11,8 @@ constexpr int MAX_VISITS = 64;
 constexpr int8_t CAT_UNKNOWN = -1;
 constexpr uint8_t VISIT_MANUAL = 1;  // assigned by hand: never re-matched
 constexpr uint8_t VISIT_COUNTED = 2; // the MCU's visit counter already accounted for this visit
+constexpr uint8_t VISIT_SYNCED = 4;  // this version of the visit is on the history server
+constexpr uint8_t VISIT_SENDING = 8; // part of the upload in flight
 
 struct Cat { char name[24]; uint16_t weightG; uint8_t color, reserved; };
 struct Settings {
@@ -24,6 +26,8 @@ struct Visit {
   int8_t cat;
   uint8_t flags;
 };
+// A visit changed after it was sent must be sent again.
+inline void touch(Visit& v) { v.flags = uint8_t(v.flags & ~(VISIT_SYNCED | VISIT_SENDING)); }
 struct History { uint16_t nextId; uint16_t count; Visit v[MAX_VISITS]; }; // oldest first
 
 inline void defaults(Settings& s) {
