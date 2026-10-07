@@ -465,6 +465,8 @@ void historyApi(){
   int code=http.GET();
   if(code==404){http.end();reply(404,"Nessun dato sul server per questa lettiera","No data on the server for this litter box yet");return;}
   if(code!=200){http.end();reply(502,"Server storico non raggiungibile: "+syncErrorText(code,false),"History server unreachable: "+syncErrorText(code,true));return;}
+  // The server answers again: uploads waiting in a long back-off go out now instead of minutes later.
+  if(syncFails){syncFails=0;syncLastTry=0;syncDirty=true;}
   server.sendHeader("Cache-Control","no-store");server.setContentLength(CONTENT_LENGTH_UNKNOWN);server.send(200,"application/json","");
   ClientOut out;out.until=millis()+8000;http.writeToStream(&out);http.end();server.sendContent("");
 }

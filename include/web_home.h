@@ -250,7 +250,7 @@ it:{title:'Lettiera',settings:'Impostazioni',binTitle:'CASSETTO',trend:'Andament
   histTitle:'Storico',m3:'3 mesi',y1:'1 anno',all:'Tutto',serverTitle:'Storico sul server',
   serverText:'Invia ogni visita a un tuo server (cartella server/ del progetto): lo storico non ha più il limite delle 64 visite.',
   serverOn:'Invia i dati al server',keyKeep:'Chiave API (vuoto = invariata)',keyNew:'Chiave API del server',
-  syncOk:a=>'Ultimo invio '+a,syncPending:'Invio in corso…',syncErr:e=>'Errore: '+e,syncOff:'Disattivato',syncNever:'Nessun invio ancora',
+  syncOk:a=>'Ultimo invio '+a,syncPending:'Invio in corso…',syncErr:e=>'Invio dei nuovi dati non riuscito ('+e+')',syncOff:'Disattivato',syncNever:'Nessun invio ancora',
   histLoading:'Carico lo storico…',histError:u=>'Server storico non raggiungibile ('+u+'). Controlla che sia acceso.',histEmpty:'Sul server non ci sono ancora visite.',
   perDay2:'al giorno',weekOf:d=>'Settimana del '+d,bagsLine:(n,d,v)=>plural(n,'cambio sacchetto','cambi sacchetto')+(d?' · in media '+(d===1?'ogni giorno':'ogni '+d+' giorni'):'')+(v?' · circa '+plural(v,'visita','visite')+' per sacchetto':''),
   months:'Per mese',month:'Mese',fromServer:'Include i dati del server storico.',serverUrl:'Indirizzo del server storico',
@@ -284,7 +284,7 @@ en:{title:'Litter box',settings:'Settings',binTitle:'BIN',trend:'Weight trend',p
   histTitle:'History',m3:'3 months',y1:'1 year',all:'All',serverTitle:'History server',
   serverText:'Sends every visit to your own server (server/ folder of the project): history is no longer limited to 64 visits.',
   serverOn:'Send data to the server',keyKeep:'API key (empty = unchanged)',keyNew:'Server API key',
-  syncOk:a=>'Last sent '+a,syncPending:'Sending…',syncErr:e=>'Error: '+e,syncOff:'Off',syncNever:'Nothing sent yet',
+  syncOk:a=>'Last sent '+a,syncPending:'Sending…',syncErr:e=>'Sending new data failed ('+e+')',syncOff:'Off',syncNever:'Nothing sent yet',
   histLoading:'Loading history…',histError:u=>'History server unreachable ('+u+'). Check that it is running.',histEmpty:'No visits on the server yet.',
   perDay2:'per day',weekOf:d=>'Week of '+d,bagsLine:(n,d,v)=>plural(n,'bag change','bag changes')+(d?' · '+(d===1?'every day':'every '+d+' days')+' on average':'')+(v?' · about '+plural(v,'visit','visits')+' per bag':''),
   months:'By month',month:'Month',fromServer:'Includes data from the history server.',serverUrl:'History server address',
@@ -429,7 +429,7 @@ function histFetch(days){
     finally{delete histBusy[days]}
   })());
 }
-function syncText(){const y=S.sync;return !y.enabled?t('syncOff'):y.error?t('syncErr',y.error):y.pending?t('syncPending'):y.ok_at?t('syncOk',ago(y.ok_at)):t('syncNever')}
+function syncText(){const y=S.sync;return !y.enabled?t('syncOff'):y.error?t('syncErr',y.error)+(y.ok_at?' · '+t('syncOk',ago(y.ok_at)).toLowerCase():''):y.pending?t('syncPending'):y.ok_at?t('syncOk',ago(y.ok_at)):t('syncNever')}
 async function drawHist(){
   const card=$('hist'),body=$('histBody');card.hidden=!syncOn();if(card.hidden){drawHist.sig='';return}
   const days=histRange;if(!histCache[days]&&!histFail[days])body.replaceChildren(h('p',{class:'empty'},t('histLoading')));
