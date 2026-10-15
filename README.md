@@ -12,6 +12,18 @@ Replace the Tuya Wi-Fi module (WBR3) of a **Tonepie Ti Pro 25 / TPCBP-T2501** se
 
 The web pages are in Italian and English: the **IT/EN** button switches language (remembered by the browser, shared by both pages; the default follows the browser). The home page can be added to the phone's home screen and gets its own icon (`tools/make_icons.py` draws it into `include/icons.h`). All code, comments and documentation are in English.
 
+The home page, with the [history server](server/README.md) running so the *History* card shows a year of visits (screenshots from the hardware-less preview `tools/preview.py` with demo data):
+
+![Home page](docs/images/home-page.png)
+
+The same page in Italian:
+
+![Home page in Italian](docs/images/home-page-it.png)
+
+The developer page at `/dev`: raw datapoints, parser statistics, guarded manual commands, firmware update and Wi-Fi settings:
+
+![Developer page](docs/images/dev-page.png)
+
 > **Status.** The firmware runs on the real unit: handshake, datapoint reads and the pages are verified. Physical commands (clean, empty, level, bag change), the settings writes and the visit detection have **not** been exercised with the litter box assembled yet. See [VALIDATION.md](VALIDATION.md) for exactly what was and was not tested.
 
 ## The hardware modification
@@ -217,7 +229,7 @@ tools/preview.py           local preview of the pages with fake data
 tools/demo_history.py      fills a history server with fake visits
 server/                    optional history server (.NET 10, EF Core, Docker)
 diagnostics/               first-contact capture from the real MCU
-docs/images/               photos of the modification
+docs/images/               photos of the modification, screenshots of the web pages
 ```
 
 Host tests (any C++11 compiler):
