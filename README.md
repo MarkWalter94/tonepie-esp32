@@ -151,7 +151,7 @@ The recovery network switches itself off as soon as the home Wi-Fi is back and n
 4. **Clean now** starts a cleaning cycle; **Litter added** records the date and asks the MCU to level the litter. Both ask for confirmation and are refused when a cat is detected inside, a fault is active or the child lock is on.
 5. The *Litter box* section of the settings changes three values kept by the MCU: automatic cleaning, the delay before cleaning (0–60 min) and automatic deodorising after cleaning. Only changed values are sent, and the page checks that the MCU reports them back.
 
-Tapping a cat opens its **visits day by day**, back to the oldest visit kept (the history holds the last 64 visits of all cats). The **weight trend** chart plots each cat's daily average weight over 30 or 90 days, with a table view for the exact values.
+Tapping a cat opens its **visits day by day**, covering up to 60 days from the visits kept (local history holds the last 256 visits of all cats). The **weight trend** chart plots each cat's daily average weight over 30 or 90 days, with a table view for the exact values.
 
 ### Cat recognition
 
@@ -167,7 +167,7 @@ The Tuya protocol exposes **no scale reading**: the MCU only sends the cat's wei
 
 ### Long-term history (optional server)
 
-The ESP keeps only the last 64 visits. With the [history server](server/README.md) running somewhere at home (Docker), enable it from the gear → *History server* (address and API key): the ESP posts its whole state to `/api/ingest` a few seconds after every change and every 15 minutes, in a background task so a slow or missing server never delays the MCU; failures are retried after 30 s, doubling up to 5 minutes, and nothing is lost while the server is down, as long as fewer than 64 visits happen meanwhile. Changing the server address requires entering the key again, so nobody on the network can redirect the key to another server. The home page then shows a **History** card, fetched through the ESP with the API key (`GET /api/history` on the ESP relays the server, so browsers never have to reach the server themselves; after a failure the page waits 90 s before asking again, since every request briefly holds up the ESP) (3 months, 1 year, all: visits per week or month for each cat, bag changes, monthly table with average weights) and the cat pop-up covers 60 days. The server may be switched off at any time (e.g. on a PC): the History card then shows the visits still in the ESP's memory, and when the server answers it shows the server's data merged with what has not been sent yet. **Data upload** (button in the History card) lists sent and unsent visits, pending deletions, last and next attempt, and has **Send now**; unsent visits are also marked in the visit list. Without a server the History card works from memory only.
+The ESP keeps the last 256 visits in non-volatile local memory, including across restarts. With the [history server](server/README.md) running somewhere at home (Docker), enable it from the gear → *History server* (address and API key): the ESP posts its state to `/api/ingest` in contiguous windows of at most 64 visits a few seconds after every change and every 15 minutes, in a background task so a slow or missing server never delays the MCU; failures are retried after 30 s, doubling up to 5 minutes, and nothing is lost while the server is down, as long as fewer than 256 visits happen meanwhile. Changing the server address requires entering the key again, so nobody on the network can redirect the key to another server. The home page then shows a **History** card, fetched through the ESP with the API key (`GET /api/history` on the ESP relays the server, so browsers never have to reach the server themselves; after a failure the page waits 90 s before asking again, since every request briefly holds up the ESP) (3 months, 1 year, all: visits per week or month for each cat, bag changes, monthly table with average weights) and the cat pop-up covers 60 days. The server may be switched off at any time (e.g. on a PC): the History card then shows the visits still in the ESP's memory, and when the server answers it shows the server's data merged with what has not been sent yet. **Data upload** (button in the History card) shows local storage usage (up to 256 visits), lists sent and unsent visits, pending deletions, last and next attempt, and has **Send now**; unsent visits are also marked in the visit list. Without a server the History card works from memory only.
 
 ## Datapoints
 
@@ -239,6 +239,10 @@ g++ -std=c++11 -Wall -Wextra -pedantic -Iinclude test/protocol_test.cpp -o proto
 g++ -std=c++11 -Wall -Wextra -pedantic -Iinclude test/litter_test.cpp -o litter_test && ./litter_test
 ```
 
+Upload button regression tests (Node.js): `node test/sync_ui_test.cjs`.
+
+Uploads retry network failures with up to three fresh connections, waiting 1 s then 2 s between them, before the normal 30 s–5 min back-off. HTTP errors such as 400 and 401 are reported immediately. **Send now** waits for the result of its own request; an unavailable status response is reported as an unverified outcome. `/api/home.sync` exposes `request_id`, `result_id`, the final `code`, `attempts`, `duration_ms`, `first_error`, and the last failed upload's `failure_at` / `failure_code` (retained until reboot). HTTPClient code -1 means a connection could not be opened; it does not establish that the server refused it.
+
 Page preview without hardware: `python tools/preview.py`, then open `http://localhost:8765` (`/mock/empty` and `/mock/full` switch scenarios).
 
 ## HTTP API
@@ -252,7 +256,7 @@ All `POST` requests need the `X-Tonepie-Token` header with the token returned by
 | `POST /api/config` | cats, tolerance and bin limit in visits (JSON body) |
 | `POST /api/sync` | history server: `enabled`, `url`, `key` (empty key = unchanged) |
 | `GET /api/history?days=n` | history from the server, relayed by the ESP |
-| `POST /api/sync/now` | upload now, skipping the back-off |
+| `POST /api/sync/now` | upload now, skipping the back-off; returns the first `request_id`; later batches continue until the backlog is empty |
 | `POST /api/visit` | reassign or delete a visit (`id`, `cat` or `delete`) |
 | `POST /api/bin/reset`, `POST /api/litter` | record a bag change / litter top-up |
 | `POST /api/arm` | enable sends for 10 minutes (`enabled=1/0`) |

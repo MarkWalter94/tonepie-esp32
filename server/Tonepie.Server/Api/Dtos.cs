@@ -1,6 +1,6 @@
 namespace Tonepie.Server.Api;
 
-// What the ESP posts to /api/ingest: its whole current state (the last 64 visits at most).
+// One upload window from the ESP's local history (at most 64 visits per request).
 // Sending a snapshot instead of single events makes retries harmless: the same data twice is one upsert.
 // Checked by IngestService.Validate.
 public record Snapshot(

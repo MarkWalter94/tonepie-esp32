@@ -7,7 +7,9 @@
 // Arduino so it can be tested on the host (test/litter_test.cpp).
 namespace Litter {
 constexpr int MAX_CATS = 4;
-constexpr int MAX_VISITS = 64;
+constexpr int MAX_VISITS = 256;
+constexpr int SYNC_VISITS = 64; // compatible with the existing history server
+constexpr int LEGACY_VISITS = 64;
 constexpr int8_t CAT_UNKNOWN = -1;
 constexpr uint8_t VISIT_MANUAL = 1;  // assigned by hand: never re-matched
 constexpr uint8_t VISIT_COUNTED = 2; // the MCU's visit counter already accounted for this visit
@@ -29,6 +31,7 @@ struct Visit {
 // A visit changed after it was sent must be sent again.
 inline void touch(Visit& v) { v.flags = uint8_t(v.flags & ~(VISIT_SYNCED | VISIT_SENDING)); }
 struct History { uint16_t nextId; uint16_t count; Visit v[MAX_VISITS]; }; // oldest first
+constexpr size_t LEGACY_HISTORY_BYTES = offsetof(History, v) + LEGACY_VISITS * sizeof(Visit);
 
 inline void defaults(Settings& s) {
   memset(&s, 0, sizeof(s));
@@ -49,7 +52,41 @@ inline void sanitize(History& h) {
   if (h.count > MAX_VISITS) { memset(&h, 0, sizeof(h)); return; }
   for (uint16_t i = 0; i < h.count; i++) {
     Visit& v = h.v[i];
+    v.flags &= ~VISIT_SENDING; // no upload survives a restart
     if (v.cat < CAT_UNKNOWN || v.cat >= MAX_CATS) { v.cat = CAT_UNKNOWN; v.flags &= ~VISIT_MANUAL; }
+  }
+}
+// NVS reads the old or new blob into a zero-initialised History. The header and
+// Visit layout are unchanged, so widening the array preserves every old visit.
+inline bool restoreStoredHistory(History& h, size_t bytes) {
+  const size_t capacity = bytes == sizeof(History) ? MAX_VISITS : bytes == LEGACY_HISTORY_BYTES ? LEGACY_VISITS : 0;
+  if (!capacity || h.count > capacity) { memset(&h, 0, sizeof(h)); return false; }
+  sanitize(h);
+  return true;
+}
+inline bool hasUnsent(const History& h) {
+  for (int i = 0; i < h.count; i++) if (!(h.v[i].flags & VISIT_SYNCED)) return true;
+  return false;
+}
+struct SyncWindow { uint16_t first, count; };
+inline SyncWindow syncWindow(const History& h) {
+  uint16_t first = 0;
+  while (first < h.count && (h.v[first].flags & VISIT_SYNCED)) first++;
+  // No backlog: refresh the newest window, as the old firmware did.
+  if (first == h.count) first = h.count > SYNC_VISITS ? h.count - SYNC_VISITS : 0;
+  uint16_t count = h.count - first;
+  if (count > SYNC_VISITS) count = SYNC_VISITS;
+  return {first, count};
+}
+inline void markSending(History& h, SyncWindow w) {
+  for (int i = 0; i < h.count; i++) h.v[i].flags &= ~VISIT_SENDING;
+  for (int i = w.first; i < w.first + w.count; i++) h.v[i].flags |= VISIT_SENDING;
+}
+inline void finishSending(History& h, bool success) {
+  for (int i = 0; i < h.count; i++) {
+    auto& v = h.v[i];
+    if (success && (v.flags & VISIT_SENDING)) v.flags |= VISIT_SYNCED;
+    v.flags &= ~VISIT_SENDING;
   }
 }
 
@@ -72,6 +109,14 @@ inline void rematch(const Settings& s, History& h) {
     v.flags &= ~VISIT_MANUAL; // automatic, or assigned to a cat that no longer exists
     // A recognised visit keeps its cat: reference weights drift, the past does not change.
     if (v.cat < 0 || v.cat >= s.catCount) v.cat = matchCat(s, v.weightG);
+  }
+}
+// Boot must not retroactively recognise an unknown visit using reference
+// weights that have drifted since it happened. Only repair removed cat ids.
+inline void retainStoredCats(const Settings& s, History& h) {
+  for (int i = 0; i < h.count; i++) {
+    auto& v = h.v[i];
+    if (v.cat >= s.catCount) { v.cat = CAT_UNKNOWN; v.flags &= ~VISIT_MANUAL; touch(v); }
   }
 }
 // Daily average weight per cat, oldest first: feeds the trend chart.

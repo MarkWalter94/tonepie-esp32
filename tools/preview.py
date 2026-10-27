@@ -64,6 +64,7 @@ def demo():
         cat["days"] = days
         cat["grams"] = [round((cat["weight_g"] + drift * (d - today) + random.gauss(0, 45)) / 10) * 10 for d in days]
     return {
+        "history_capacity": 256,
         "config": {"tolerance_g": 500, "bin_limit_visits": 30, "cats": cats},
         "bin": {"since": now - 3 * 86400 - 5000, "visits": 17},
         "visits": visits,
@@ -80,7 +81,8 @@ LITTER_AT = int(time.time()) - 12 * 86400
 # History server shown by the page: run the server (server/) and fill it with tools/demo_history.py.
 SYNC = {"enabled": True, "url": "http://localhost:8090", "device": "tonepie-demo", "key_set": True,
         "ok_at": int(time.time()) - 3 * 3600, "error": "connessione rifiutata", "pending": True, "busy": False,
-        "try_at": int(time.time()) - 200, "deleted": 1, "dirty": True, "next_s": 100}
+        "try_at": int(time.time()) - 200, "deleted": 1, "dirty": True, "next_s": 100,
+        "request_id": 1, "result_id": 1}
 MCU = {"online": True, "ready": True, "pending": False, "presence": False, "fault": 0, "lock": False,
        "auto": True, "wait_min": 0, "odor": True, "armed": False}
 ACTIONS = {"clean", "empty", "auto_on", "auto_off", "bag", "level", "odor_on", "odor_off"}
@@ -204,7 +206,9 @@ class Handler(BaseHTTPRequestHandler):
             except OSError:
                 SYNC.update(error="connessione rifiutata", pending=True, next_s=300)
             SYNC["try_at"] = int(time.time())
-            self.send(202, {"message": "Invio in corso"})
+            SYNC["request_id"] += 1
+            SYNC["result_id"] = SYNC["request_id"]
+            self.send(202, {"message": "Invio in corso", "request_id": SYNC["request_id"]})
         elif path == "/api/arm":
             MCU["armed"] = parse_qs(raw).get("enabled", ["0"])[0] == "1"
             self.send(200, {"message": "Invii abilitati" if MCU["armed"] else "Invii disabilitati"})

@@ -75,6 +75,36 @@ public sealed class ApiTests : IDisposable
     static List<SnapshotVisit> Series(IEnumerable<int> ids, long from) =>
         [.. ids.Select((id, i) => new SnapshotVisit(id, from + i * 60, 4200, 40, 0, false))];
 
+    [Theory]
+    [InlineData(1)]
+    [InlineData(65400)]
+    public async Task Larger_local_history_uploads_in_64_visit_windows_without_deleting_other_batches(int firstId)
+    {
+        var all = Series(Enumerable.Range(0, 256).Select(i => (firstId + i - 1) % 65535 + 1), _now - 86400);
+        foreach (var batch in all.Chunk(64)) Assert.Equal(batch.Length, await Post(Snap([.. batch])));
+        Assert.Equal(256, await StoredVisits());
+        // Replaying an old window must leave all the later visits intact.
+        Assert.Equal(0, await Post(Snap([.. all.Take(64)])));
+        Assert.Equal(256, await StoredVisits());
+
+        var removed = new[] { all[0], all[199], all[255] }.Select(v => new VisitRef(v.Id, v.T)).ToList();
+        var removedIds = removed.Select(v => v.Id).ToHashSet();
+        var remaining = all.Where(v => !removedIds.Contains(v.Id)).ToList();
+        var batches = remaining.Chunk(64).ToList();
+        for (int i = 0; i < batches.Count; i++)
+        {
+            // Explicit deletions are withheld until the newest window. An id
+            // in a future batch must not widen the server's deletion inference.
+            await Post(Snap([.. batches[i]], deleted: i == batches.Count - 1 ? removed : null));
+            if (i == 0) Assert.Equal(256, await StoredVisits());
+        }
+        Assert.Equal(253, await StoredVisits());
+        var corrected = remaining.Take(64).Select(v => v.Id == all[1].Id ? v with { Cat = 1, Manual = true } : v).ToList();
+        Assert.Equal(1, await Post(Snap(corrected)));
+        Assert.Equal(253, await StoredVisits());
+        Assert.Equal(1, Count((await Get())!, "Flipper"));
+    }
+
     [Fact]
     public async Task Rejects_missing_or_wrong_key_and_invalid_data()
     {

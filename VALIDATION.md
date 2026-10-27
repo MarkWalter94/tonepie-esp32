@@ -70,6 +70,30 @@ Ai-Thinker ESP-C3-13-Kit (ESP32-C3 rev 0.3, CH340 on COM6), Tonepie Ti Pro 25 ma
 - Each visit records whether this version of it reached the server (changed visits are sent again); last successful upload kept across restarts; `POST /api/sync/now`.
 - Tested on the real unit with the server container stopped: History card from memory (64 visits), Send now reported "connessione rifiutata"; container started again: Send now uploaded, 64 sent / 0 to send, history merged.
 
+## 16 October 2026
+
+### 1.12.0 — connection recovery and confirmed upload results
+
+- The initial failure was observed with Docker already running: the ESP reported code -1 while a subsequent history relay succeeded. Arduino HTTPClient returns -1 for any failed TCP connect, so "connection refused" did not establish the network cause. That original network failure could not be reproduced once connectivity returned; Docker auto-start was not a supported diagnosis.
+- Four consecutive manual uploads on 1.11 succeeded without history reads. Stopping and starting only the history container also recovered with Send now on 1.11. These tests did not demonstrate a permanently stuck upload task.
+- 1.12 retries network failures up to three times with fresh connections and 1 s / 2 s waits in the worker. HTTP error responses remain final. The upload API returns a request id; the page confirms only its corresponding completed result and reports an unverified outcome when status cannot be read. The last failure remains visible in diagnostic fields until reboot.
+- Node regression tests pass for stale errors, requests sharing a timestamp, missing status responses, actual failed results and preservation of request ids by the API helper; the entire page's JavaScript parses. Firmware build passes: RAM 59,876 B, flash 1,095,312 B.
+- Updated the real unit over OTA; all 64 visit identities, times, weights, durations and cat assignments matched before/after. MCU handshake returned ready.
+- Live fault injection on 1.12, with no history reads: server restored during a manual upload → HTTP 200 after three connections in 7,504 ms (initial error -1); server unavailable for all attempts → final -1 after three connections in 15,023 ms; server restored → the scheduled retry succeeded automatically, HTTP 200 in 452 ms. Server visit count remained 159; all 64 visits on the ESP marked sent. Machine-readable results: `diagnostics/sync-recovery-20261016.json`.
+- The historical cause of the first TCP failure remains unidentified. These tests establish recovery from temporary connection failures, not that every intermittent LAN fault has been eliminated.
+
+## 27 October 2026
+
+### 1.13.0 — 256 visits in local non-volatile memory
+
+- Local capacity raised from 64 to 256 without changing partitions. The NVS history header and Visit layout are retained; the old 1,028-byte blob migrates atomically to 4,100 bytes. Failed saves are exposed through the API and an alert.
+- Home API streams the visits rather than expanding a JSON document for the full archive. The upload panel shows used/capacity; Show all includes the complete local archive.
+- Uploads remain compatible with the existing server's 64-visit request limit: oldest unsent contiguous window first, only that window acknowledged, remaining backlog requeued. Explicit deletions travel only with the newest window to avoid widening deletion inference over later unsent batches. Send now waits until the backlog is drained or an error occurs.
+- Native C++ tests pass for migration with all fields retained, 256-visit persistence layout, ring eviction, four upload windows, retries and changed visits during an upload. Node tests pass, including waiting for all batches. All 22 server tests pass, including 256 visits in four windows, replay, corrections, deletions and id wrap.
+- Live update: 64 original visits retained; the 4,100-byte archive saved and then loaded after another OTA reboot, capacity 256, 328 NVS entries still free. A pre-existing boot rematch changed four unknown cat assignments during the first update; they were restored from the pre-update backup and boot now preserves valid unknown assignments. Final comparison includes ids, times, weights, durations, cat assignments and manual flags.
+- Firmware build: RAM 62,948 B, flash 1,097,910 B. MCU returned ready. Results: `diagnostics/local-256-20261027.json`. Filling all 256 slots with real visits has not yet occurred; capacity/eviction and full-batch sync are covered by automated tests without adding fake visits to the live history.
+- At the final check the history container was exited (stopped at 11:16:45 UTC), so live uploads remained pending. It was left stopped; the 256-slot local NVS archive remained healthy. Multi-window uploads were verified against the integration-test server.
+
 ## Not tested yet
 
 - Any physical command from this firmware: clean (101), empty (102), level litter (126), bag change (127), and the writes to 105/117/118/129.

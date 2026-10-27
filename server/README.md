@@ -32,7 +32,7 @@ Other databases: set `Tonepie__Provider` (`Sqlite`, `Postgres`, `SqlServer`) and
 
 | Endpoint | |
 |---|---|
-| `POST /api/ingest` | ESP snapshot (cats, bin, litter, last 64 visits, deleted visits), at most 64 KB. Idempotent: resending the same snapshot changes nothing |
+| `POST /api/ingest` | ESP upload window (cats, bin, litter, up to 64 visits, deleted visits), at most 64 KB. Idempotent: resending the same snapshot changes nothing |
 | `GET /api/history?device=<id>&days=<n>` | visits per local day and cat name, average weight, bag changes and litter top-ups; `days=0` = everything |
 | `GET /api/devices` | known devices |
 | `GET /health` | no key; 200 when the database answers, 503 otherwise |
@@ -44,7 +44,7 @@ Every `/api` endpoint needs `Authorization: Bearer <key>` (checked before the bo
 - A visit is identified by the ESP's visit number **and** its time, so numbers that restart after an erased ESP never overwrite old visits.
 - Corrections made on the ESP (cat reassigned, visit deleted) update the stored row; deleted visits stay in the table flagged `Deleted` and are excluded from the history.
 - A stored visit missing from the snapshot counts as deleted only if its number lies inside the snapshot's number window (which may wrap: 65530..65535, 1..20), after its first visit, and it is not older than the snapshot's oldest timed visit. Visits without a time are deleted only when listed explicitly.
-- Visits that left the ESP's memory (older than its last 64) are kept as they are.
+- Visits outside the current upload window are kept as they are. The ESP stores 256 locally and sends its backlog in contiguous windows of at most 64, oldest first; explicit deletions are included only with the newest window.
 - History is grouped by cat **name**, because the ESP renumbers cats when one is removed. A blank name is stored as `Cat <n>`, names are cut at 24 characters.
 - Snapshots of the same device are stored one at a time.
 - Days are local days of `Tonepie__TimeZone` (default `Europe/Rome`); an invalid zone stops the start-up.

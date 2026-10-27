@@ -1,0 +1,85 @@
+{
+  "date": "2026-10-16",
+  "firmware": "1.12.0-sync-recovery",
+  "tests": [
+    {
+      "test": "server_returns_during_manual_request",
+      "sync": {
+        "enabled": true,
+        "url": "http://192.168.178.53:8090",
+        "device": "tonepie-534164",
+        "key_set": true,
+        "ok_at": 1792136580,
+        "error": "",
+        "pending": false,
+        "busy": false,
+        "try_at": 1792136572,
+        "deleted": 0,
+        "dirty": false,
+        "request_id": 2,
+        "result_id": 2,
+        "code": 200,
+        "first_error": -1,
+        "attempts": 3,
+        "duration_ms": 7504,
+        "failure_at": 0,
+        "failure_code": 0,
+        "next_s": 892
+      }
+    },
+    {
+      "test": "all_connections_fail",
+      "sync": {
+        "enabled": true,
+        "url": "http://192.168.178.53:8090",
+        "device": "tonepie-534164",
+        "key_set": true,
+        "ok_at": 1792136580,
+        "error": "impossibile connettersi al server",
+        "pending": true,
+        "busy": false,
+        "try_at": 1792136581,
+        "deleted": 0,
+        "dirty": true,
+        "request_id": 3,
+        "result_id": 3,
+        "code": -1,
+        "first_error": -1,
+        "attempts": 3,
+        "duration_ms": 15023,
+        "failure_at": 1792136596,
+        "failure_code": -1,
+        "next_s": 14
+      }
+    },
+    {
+      "test": "automatic_recovery_without_history_or_manual_request",
+      "sync": {
+        "enabled": true,
+        "url": "http://192.168.178.53:8090",
+        "device": "tonepie-534164",
+        "key_set": true,
+        "ok_at": 1792136611,
+        "error": "",
+        "pending": false,
+        "busy": false,
+        "try_at": 1792136611,
+        "deleted": 0,
+        "dirty": false,
+        "request_id": 4,
+        "result_id": 4,
+        "code": 200,
+        "first_error": 0,
+        "attempts": 1,
+        "duration_ms": 452,
+        "failure_at": 1792136596,
+        "failure_code": -1,
+        "next_s": 899
+      }
+    }
+  ],
+  "server_visits_before": 159,
+  "server_visits_after": 159,
+  "device_visits": 64,
+  "unsent": 0
+}

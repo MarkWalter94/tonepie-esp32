@@ -254,19 +254,19 @@ it:{title:'Lettiera',settings:'Impostazioni',binTitle:'CASSETTO',trend:'Andament
   litterDone:'Registrato: la lettiera livella la sabbia',litterText:'Registro la data e chiedo alla lettiera di livellare la sabbia nuova.',litterOk:'Lettiera aggiunta',
   cleanAsk:'Avvio la pulizia?',cleanText:'Il tamburo ruoterà. Controlla che nessun gatto sia dentro o stia entrando.',cleanSent:'Pulizia richiesta alla lettiera',unreachableApi:'Lettiera non raggiungibile',
   dayByDay:'Visite giorno per giorno',total:'visite',perDay:'al giorno',lastDays:n=>'negli ultimi '+n+' giorni',untimed:n=>plural(n,'visita','visite')+' senza orario non incluse.',
-  keeps:'Lo storico conserva le ultime 64 visite di tutti i gatti.',tapCat:'Tocca un gatto per le visite giorno per giorno',
+  keeps:n=>'Lo storico conserva le ultime '+n+' visite di tutti i gatti.',tapCat:'Tocca un gatto per le visite giorno per giorno',
   histTitle:'Storico',m3:'3 mesi',y1:'1 anno',all:'Tutto',serverTitle:'Storico sul server',
-  serverText:'Invia ogni visita a un tuo server (cartella server/ del progetto): lo storico non ha più il limite delle 64 visite.',
+  serverText:'Invia le visite a un tuo server: conserva lo storico anche oltre la capienza della memoria locale.',
   serverOn:'Invia i dati al server',keyKeep:'Chiave API (vuoto = invariata)',keyNew:'Chiave API del server',
   syncOk:a=>'Ultimo invio '+a,syncPending:'Invio in corso…',syncErr:e=>'Invio dei nuovi dati non riuscito ('+e+')',syncOff:'Disattivato',syncNever:'Nessun invio ancora',
   histLoading:'Carico lo storico…',histError:u=>'Server storico non raggiungibile ('+u+'). Controlla che sia acceso.',histEmpty:'Sul server non ci sono ancora visite.',
   perDay2:'al giorno',weekOf:d=>'Settimana del '+d,bagsLine:(n,d,v)=>plural(n,'cambio sacchetto','cambi sacchetto')+(d?' · in media '+(d===1?'ogni giorno':'ogni '+d+' giorni'):'')+(v?' · circa '+plural(v,'visita','visite')+' per sacchetto':''),
   months:'Per mese',month:'Mese',fromServer:'Include i dati del server storico.',syncTitle:'Invio al server storico',sendNow:'Invia ora',syncPanel:'Invio dati',
   srcLocal:(n,d)=>'Solo dati in memoria: '+plural(n,'visita','visite')+(d?' dal '+d:'')+'.',srcOffline:'Server storico spento. ',srcServer:'Dati del server più quelli non ancora inviati.',
-  sentN:'inviate',unsentN:'da inviare',delN:'eliminazioni da comunicare',otherPending:'Altre modifiche (gatti, cassetto, lettiera) in attesa di invio.',
+  sentN:'inviate',unsentN:'da inviare',delN:'eliminazioni da comunicare',otherPending:'Altre modifiche (gatti, cassetto, lettiera) in attesa di invio.',localMemory:'Visite in memoria locale',storageError:'Non riesco a salvare le visite nella memoria locale. Mantieni la lettiera accesa e verifica lo storico.',
   lastTry:'Ultimo tentativo',lastOk:'Ultimo invio riuscito',nextTry:'Prossimo tentativo',inSec:n=>n<=0?'a breve':n<60?'tra '+n+' s':'tra '+Math.round(n/60)+' min',sendingNow:'in corso',never:'mai',server:'Server',
   unsentList:'Visite non ancora inviate',sentList:n=>'Visite già inviate ('+n+')',allSent:'Tutte le visite sono sul server.',notSent:'non inviata',noTime:'senza orario',
-  forced:'Invio richiesto…',forcedOk:'Dati inviati al server',forcedErr:e=>'Invio non riuscito: '+e,serverUrl:'Indirizzo del server storico',
+  forced:'Invio richiesto…',forcedOk:'Dati inviati al server',forcedErr:e=>'Invio non riuscito: '+e,forcedUnknown:'Esito non verificato: aggiorna lo stato prima di riprovare.',serverUrl:'Indirizzo del server storico',
   waitSeq:'Attendi: sto già inviando comandi alla lettiera',unknownOutcome:'Collegamento perso: esito sconosciuto. Controlla la lettiera prima di riprovare.',srvWait:'Server storico non raggiungibile: per ora vedi solo i dati della lettiera.',unknownCats:'Non riconosciuti',
   letters:['D','L','M','M','G','V','S'],locale:'it-IT',other:'EN',otherName:'Switch to English'},
 en:{title:'Litter box',settings:'Settings',binTitle:'BIN',trend:'Weight trend',period:'Period',d30:'30 d',d90:'90 d',showValues:'Show values',recent:'Recent visits',
@@ -293,19 +293,19 @@ en:{title:'Litter box',settings:'Settings',binTitle:'BIN',trend:'Weight trend',p
   litterDone:'Recorded: the litter box levels the new litter',litterText:'I record the date and ask the litter box to level the new litter.',litterOk:'Litter added',
   cleanAsk:'Start cleaning?',cleanText:'The drum will rotate. Make sure no cat is inside or about to enter.',cleanSent:'Cleaning requested',unreachableApi:'Litter box unreachable',
   dayByDay:'Visits day by day',total:'visits',perDay:'per day',lastDays:n=>'in the last '+n+' days',untimed:n=>plural(n,'visit','visits')+' without a time not included.',
-  keeps:'The history keeps the last 64 visits of all cats.',tapCat:'Tap a cat for its visits day by day',
+  keeps:n=>'The history keeps the last '+n+' visits of all cats.',tapCat:'Tap a cat for its visits day by day',
   histTitle:'History',m3:'3 months',y1:'1 year',all:'All',serverTitle:'History server',
-  serverText:'Sends every visit to your own server (server/ folder of the project): history is no longer limited to 64 visits.',
+  serverText:'Sends visits to your own server, preserving history beyond the capacity of local memory.',
   serverOn:'Send data to the server',keyKeep:'API key (empty = unchanged)',keyNew:'Server API key',
   syncOk:a=>'Last sent '+a,syncPending:'Sending…',syncErr:e=>'Sending new data failed ('+e+')',syncOff:'Off',syncNever:'Nothing sent yet',
   histLoading:'Loading history…',histError:u=>'History server unreachable ('+u+'). Check that it is running.',histEmpty:'No visits on the server yet.',
   perDay2:'per day',weekOf:d=>'Week of '+d,bagsLine:(n,d,v)=>plural(n,'bag change','bag changes')+(d?' · '+(d===1?'every day':'every '+d+' days')+' on average':'')+(v?' · about '+plural(v,'visit','visits')+' per bag':''),
   months:'By month',month:'Month',fromServer:'Includes data from the history server.',syncTitle:'Sending to the history server',sendNow:'Send now',syncPanel:'Data upload',
   srcLocal:(n,d)=>'Litter box memory only: '+plural(n,'visit','visits')+(d?' since '+d:'')+'.',srcOffline:'History server off. ',srcServer:'Server data plus what has not been sent yet.',
-  sentN:'sent',unsentN:'to send',delN:'deletions to report',otherPending:'Other changes (cats, bin, litter) waiting to be sent.',
+  sentN:'sent',unsentN:'to send',delN:'deletions to report',otherPending:'Other changes (cats, bin, litter) waiting to be sent.',localMemory:'Visits in local memory',storageError:'Visits cannot be saved to local memory. Keep the litter box powered on and check its history.',
   lastTry:'Last attempt',lastOk:'Last successful upload',nextTry:'Next attempt',inSec:n=>n<=0?'shortly':n<60?'in '+n+' s':'in '+Math.round(n/60)+' min',sendingNow:'in progress',never:'never',server:'Server',
   unsentList:'Visits not sent yet',sentList:n=>'Visits already sent ('+n+')',allSent:'All visits are on the server.',notSent:'not sent',noTime:'no time',
-  forced:'Sending requested…',forcedOk:'Data sent to the server',forcedErr:e=>'Sending failed: '+e,serverUrl:'History server address',
+  forced:'Sending requested…',forcedOk:'Data sent to the server',forcedErr:e=>'Sending failed: '+e,forcedUnknown:'Result not verified: refresh the status before trying again.',serverUrl:'History server address',
   waitSeq:'Please wait: commands are already being sent to the litter box',unknownOutcome:'Connection lost: result unknown. Check the litter box before trying again.',srvWait:'History server unreachable: showing only the litter box’s own data for now.',unknownCats:'Not recognised',
   letters:['S','M','T','W','T','F','S'],locale:'en-GB',other:'IT',otherName:'Passa all’italiano'}};
 let LANG=(()=>{try{const l=localStorage.getItem('lang');if(TEXT[l])return l}catch(e){}return /^it\b/i.test(navigator.language||'')?'it':'en'})();
@@ -338,7 +338,7 @@ const dur=s=>s<60?s+' s':Math.floor(s/60)+' min'+(s%60?' '+s%60+' s':'');
 function toast(m){if(!m)return;const e=$('toast');e.textContent=m;e.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.remove('on'),3200)}
 async function api(path,data,json){const o={method:'POST',headers:{'X-Tonepie-Token':token,'X-Tonepie-Lang':LANG}};
   if(json){o.headers['Content-Type']='application/json';o.body=JSON.stringify(data)}else o.body=new URLSearchParams(data||{});
-  try{const r=await fetch(path,o);const j=await r.json().catch(()=>({}));return{ok:r.ok,status:r.status,message:j.message||''}}catch(e){return{ok:false,status:0,message:t('unreachableApi')}}}
+  try{const r=await fetch(path,o);const j=await r.json().catch(()=>({}));return{...j,ok:r.ok,status:r.status,message:j.message||''}}catch(e){return{ok:false,status:0,message:t('unreachableApi')}}}
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 // Buttons and Save are disabled while anything is being sent.
 function setBusy(on){busy=on;$('saveBtn').disabled=on;if(S)render()}
@@ -369,6 +369,7 @@ function render(){
   if(!m.online)setStatus('',t('offline'));else if(m.fault)setStatus('bad',t('fault'));else if(m.presence)setStatus('cat',t('catInside'));else if(m.ready)setStatus('ok',t('ready'));else setStatus('',t('booting'));
   const pct=S.bin.visits/limit,al=$('alerts');al.replaceChildren();
   const warn='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.200" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4m0 4h.01M10.300 3.900 2.500 17.500A2 2 0 0 0 4.200 20.500h15.600a2 2 0 0 0 1.700-3L13.700 3.900a2 2 0 0 0-3.400 0z"/></svg>';
+  if(S.history_stored===false)al.append(h('div',{class:'alert'},t('storageError')));
   if(m.online&&m.fault)al.append(h('div',{class:'alert'},h('span',{html:warn,style:'display:flex'}),t('faultAlert',m.fault)));
   if(pct>=1)al.append(h('div',{class:'alert'},h('span',{html:warn,style:'display:flex'}),t('fullAlert')));
   else if(pct>=.8)al.append(h('div',{class:'alert warn'},h('span',{html:warn,style:'display:flex'}),t('almostAlert')));
@@ -393,7 +394,7 @@ function render(){
   // visits
   $('visitsCard').hidden=false;const list=$('visits');list.replaceChildren();$('visitsHint').textContent=vis.length?t('tapFix'):'';
   if(!vis.length)list.append(h('p',{class:'empty'},t('visitsEmpty')));
-  let day='';for(const v of vis.slice(0,showAll?64:10)){const d=dayLabel(v.t);if(d!==day){day=d;list.append(h('p',{class:'day'},d))}
+  let day='';for(const v of vis.slice(0,showAll?vis.length:10)){const d=dayLabel(v.t);if(d!==day){day=d;list.append(h('p',{class:'day'},d))}
     const c=v.cat>=0?cats[v.cat]:null;
     list.append(h('button',{class:'visit',onclick:()=>openVisit(v)},avatar(c?c.color:null,'sm'),
       h('div',{class:'who'},h('b',{},c?c.name:t('notRecognised')),h('span',{},[v.g?kg(v.g):null,v.s?dur(v.s):null].filter(Boolean).join(' · ')||t('noData'),syncOn()&&!v.sent?h('span',{class:'unsent'},' · '+t('notSent')):null)),
@@ -415,7 +416,7 @@ function openCat(i){
   if(srv)for(const d of srv.days)srvDays[d.d]=d.v[c.name]||0;
   const span=Math.min(60,Math.max(7,daysBack(oldest)+1,srv&&srv.firstVisit?daysBack(srv.firstVisit)+1:0)),counts=Array(span).fill(0);
   for(const v of timed){const k=daysBack(v.t);if(k>=0&&k<span)counts[k]++}
-  // Both sources hold only part of the truth (server: not yet sent; ESP: last 64 visits): take the larger.
+  // Each source may have visits missing from the other: take the larger count.
   if(srv)for(let k=0;k<span;k++)counts[k]=Math.max(counts[k],srvDays[dateKey(dayStart(k))]||0);
   const total=counts.reduce((a,b)=>a+b,0),most=Math.max(1,...counts);
   $('dlgCat').style.setProperty('--c',COLORS[c.color%6]);
@@ -425,7 +426,7 @@ function openCat(i){
   $('catDays').replaceChildren(...counts.map((n,k)=>{const s=dayStart(k);
     const label=k===0?t('Today'):k===1?t('Yesterday'):new Date(s*1000).toLocaleDateString(t('locale'),{weekday:'short',day:'numeric',month:'short'});
     return h('div',{class:'drow'+(n?'':' zero')},h('span',{},label),h('div',{},h('i',{style:'width:'+(n/most*100)+'%'})),h('b',{},String(n)))}));
-  const untimed=mine.length-timed.length;$('catNote').textContent=(untimed?t('untimed',untimed)+' ':'')+(srv?t('fromServer'):syncOn()?(openCat.failed?t('srvWait'):''):t('keeps'));
+  const untimed=mine.length-timed.length;$('catNote').textContent=(untimed?t('untimed',untimed)+' ':'')+(srv?t('fromServer'):syncOn()?(openCat.failed?t('srvWait'):''):t('keeps',S.history_capacity||64));
   if(!$('dlgCat').open)$('dlgCat').showModal();
   if(syncOn()&&!srv&&!openCat.failed)histFetch(90).then(()=>{if($('dlgCat').open&&openCat.i===i)openCat(i)}).catch(()=>{openCat.failed=true;if($('dlgCat').open&&openCat.i===i)openCat(i)});
 }
@@ -448,8 +449,8 @@ function histFetch(days){
     finally{delete histBusy[days]}
   })());
 }
-function syncText(){const y=S.sync;return !y.enabled?t('syncOff'):y.error?t('syncErr',y.error)+(y.ok_at?' · '+t('syncOk',ago(y.ok_at)).toLowerCase():''):y.pending?t('syncPending'):y.ok_at?t('syncOk',ago(y.ok_at)):t('syncNever')}
-// History from the litter box's own memory (its last 64 visits), aggregated like the server does.
+function syncText(){const y=S.sync;return !y.enabled?t('syncOff'):y.busy?t('sendingNow'):y.error?t('syncErr',y.error)+(y.ok_at?' · '+t('syncOk',ago(y.ok_at)).toLowerCase():''):y.pending?t('syncPending'):y.ok_at?t('syncOk',ago(y.ok_at)):t('syncNever')}
+// History from the litter box's own memory, aggregated like the server does.
 function localHist(days){
   const cats=S.config.cats,map={},from=days?dayStart(days-1):0;
   for(const v of S.visits){if(!v.t||v.t<from)continue;const k=dateKey(v.t),d=map[k]||(map[k]={d:k,v:{},w:{},n:{}});
@@ -480,6 +481,7 @@ function drawSync(){
     y.deleted?h('div',{},h('b',{},String(y.deleted)),h('span',{},t('delN'))):null].filter(Boolean));
   const when=s=>s?ago(s)+' · '+dayLabel(s)+t('at',clock(s)):t('never');
   $('syncRows').replaceChildren(...[h('div',{class:'srow'},h('span',{},t('server')),h('b',{},y.url)),
+    h('div',{class:'srow'},h('span',{},t('localMemory')),h('b',{},all.length+' / '+(S.history_capacity||64))),
     h('div',{class:'srow'},h('span',{},t('lastTry')),h('b',{},when(y.try_at))),
     h('div',{class:'srow'},h('span',{},t('lastOk')),h('b',{},when(y.ok_at))),
     h('div',{class:'srow'},h('span',{},t('nextTry')),h('b',{},y.busy?t('sendingNow'):y.pending||y.error?t('inSec',y.next_s):'—')),
@@ -493,12 +495,14 @@ function drawSync(){
 let syncNowBusy=false;
 function openSync(){drawSync();$('dlgSync').showModal()}
 $('syncNow').onclick=async()=>{
-  const before=S.sync.try_at;syncNowBusy=true;$('syncNow').disabled=true;toast(t('forced'));
+  syncNowBusy=true;$('syncNow').disabled=true;toast(t('forced'));
   try{
     const r=await api('/api/sync/now');if(!r.ok){toast(r.message);return}
-    // Wait for the attempt to finish: the ESP answers within a few seconds, or gives up after about 10.
-    for(let i=0;i<15;i++){await sleep(1500);await refresh();if(S.sync.try_at!==before&&!S.sync.busy)break}
-    toast(S.sync.error?t('forcedErr',S.sync.error):t('forcedOk'));
+    // Only the result of this request can confirm it. Old errors, failed status
+    // reads and second-resolution timestamps cannot establish the outcome.
+    let completed=false;
+    for(let i=0;i<40;i++){await sleep(1500);const s=await refresh();if(s&&s.sync.result_id>=r.request_id&&!s.sync.busy&&(s.sync.error||!s.sync.pending)){completed=true;toast(s.sync.error?t('forcedErr',s.sync.error):t('forcedOk'));break}}
+    if(!completed){toast(t('forcedUnknown'));return}
     for(const k in histFail)delete histFail[k];drawHist.sig='';lastKey='';await refresh();
   }finally{syncNowBusy=false;if($('dlgSync').open)drawSync()}
 };
@@ -609,8 +613,8 @@ let resizeTimer;addEventListener('resize',()=>{clearTimeout(resizeTimer);resizeT
 async function refresh(){
   try{const r=await fetch('/api/home',{cache:'no-store',headers:{'X-Tonepie-Lang':LANG}});if(!r.ok)throw 0;const s=await r.json();token=s.token;S=s;
     const key=JSON.stringify([s.mcu,s.config,s.bin,s.visits,{...s.sync,next_s:0},s.litter_at,Math.floor(Date.now()/60000)]);if(key!==lastKey){lastKey=key;render()}
-    else if($('dlgSync').open)drawSync()}
-  catch(e){lastKey='';setStatus('',t('unreachable'));$('clean').disabled=true}
+    else if($('dlgSync').open)drawSync();return s}
+  catch(e){lastKey='';setStatus('',t('unreachable'));$('clean').disabled=true;return null}
 }
 function openVisit(v){
   const cats=S.config.cats;$('visitInfo').textContent=[v.t?dayLabel(v.t)+t('at',clock(v.t)):null,v.g?kg(v.g):null,v.s?dur(v.s):null].filter(Boolean).join(' · ')||t('visitNoData');

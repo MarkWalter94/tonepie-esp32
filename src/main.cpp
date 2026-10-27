@@ -44,6 +44,7 @@ struct Pending { bool active=false; uint8_t id=0,type=0; uint32_t value=0,since=
 Preferences prefs;
 Litter::Settings cats;
 Litter::History history;
+bool historyStored=true;
 Litter::Tracker tracker;
 Litter::WeightLog weights,weightScratch;
 struct Bin { uint32_t reserved=0,since=0,visits=0; } bin; // layout kept for the data saved by 1.x
@@ -59,11 +60,14 @@ void trackerSignal(uint8_t id,uint32_t value,uint32_t now);
 bool kgSeen=false,clockStarted=false,otaAllowed=false,otaOk=false,apOn=false;
 String wifiSsid,wifiPassword; // NVS values set from /dev override the ones in config.h
 uint32_t wifiSeen=0;
-// History server (optional): the whole current state is posted to <url>/api/ingest whenever it changes.
+// History server (optional): state and contiguous visit windows go to <url>/api/ingest after changes.
 // The POST runs in its own task so a slow or absent server never delays the MCU.
 bool syncOn=false,syncDirty=true;
 String syncUrl,syncKey,deviceId;
 uint32_t syncLastTry=0,syncTryAt=0,syncOkAt=0,syncFails=0,wifiUpAt=0,syncGen=0,syncTaskGen=0;
+uint32_t syncRequestId=0,syncResultId=0,syncDurationMs=0,syncFailureAt=0;
+int syncFailureCode=0,syncResultCode=0,syncFirstError=0;
+uint8_t syncAttempts=0;
 int syncErrCode=0; // 0 = none, <0 HTTPClient error, >0 HTTP status
 struct DeletedRef { uint16_t id; uint32_t epoch; };
 struct DeletedList { uint8_t count; DeletedRef refs[16]; } deleted{}; // reported until the server has seen them; kept in NVS
@@ -71,6 +75,9 @@ uint8_t deletedSent=0;
 TaskHandle_t syncTask=nullptr;
 volatile bool syncBusy=false,syncDone=false;
 volatile int syncCode=0;
+volatile uint8_t syncWorkerAttempts=0;
+volatile uint32_t syncWorkerDurationMs=0;
+volatile int syncWorkerFirstError=0;
 String syncBody,syncTarget,syncAuth; // owned by the task while syncBusy
 
 bool online() { return heard && uint32_t(millis()-lastHeartbeat)<Config::LINK_TIMEOUT_MS; }
@@ -108,19 +115,29 @@ int32_t utcOffset(uint32_t epoch) {
 uint16_t localDay(uint32_t epoch) { return epoch?uint16_t((epoch+utcOffset(epoch))/86400):0; }
 void saveDeleted() { prefs.putBytes("deleted",&deleted,sizeof(deleted)); }
 void saveCats() { prefs.putBytes("cats",&cats,sizeof(cats));syncDirty=true; }
-void saveVisits() { prefs.putBytes("visits",&history,sizeof(history));prefs.putBytes("bin",&bin,sizeof(bin));syncDirty=true; }
+void saveHistory() {
+  bool ok=prefs.putBytes("visits",&history,sizeof(history))==sizeof(history);
+  if(!ok && historyStored)logLine("Errore: storico non salvato nella memoria locale");
+  historyStored=ok;
+}
+void saveVisits() { saveHistory();prefs.putBytes("bin",&bin,sizeof(bin));syncDirty=true; }
 // Only the upload bookkeeping changed: nothing new to send.
-void saveVisitFlags() { prefs.putBytes("visits",&history,sizeof(history)); }
+void saveVisitFlags() { saveHistory(); }
 void loadStore() {
   prefs.begin("litter",false);
   Litter::defaults(cats);memset(&history,0,sizeof(history));
   if(prefs.getBytesLength("cats")==sizeof(cats))prefs.getBytes("cats",&cats,sizeof(cats));
-  if(prefs.getBytesLength("visits")==sizeof(history))prefs.getBytes("visits",&history,sizeof(history));
+  size_t historyBytes=prefs.getBytesLength("visits");
+  if(historyBytes==sizeof(history) || historyBytes==Litter::LEGACY_HISTORY_BYTES){
+    if(prefs.getBytes("visits",&history,historyBytes)!=historyBytes || !Litter::restoreStoredHistory(history,historyBytes)){
+      memset(&history,0,sizeof(history));logLine("Storico locale non valido");
+    }
+  }
   if(prefs.getBytesLength("bin")==sizeof(bin))prefs.getBytes("bin",&bin,sizeof(bin));
   memset(&weights,0,sizeof(weights));
   if(prefs.getBytesLength("weights")==sizeof(weights))prefs.getBytes("weights",&weights,sizeof(weights));
   Litter::sanitize(cats);Litter::sanitize(history);Litter::sanitize(weights);
-  Litter::rematch(cats,history); // settings reset to defaults: visits must not point at cats that are gone
+  Litter::retainStoredCats(cats,history);
   tracker.restore(prefs.isKey("count"),prefs.getUInt("count",0));
   if(prefs.getBytesLength("deleted")==sizeof(deleted))prefs.getBytes("deleted",&deleted,sizeof(deleted));
   if(deleted.count>16)deleted.count=0;
@@ -128,6 +145,7 @@ void loadStore() {
   wifiSsid=prefs.getString("ssid",Config::WIFI_SSID);wifiPassword=prefs.getString("wpass",Config::WIFI_PASSWORD);
   syncOn=prefs.getBool("syncOn",false);syncUrl=prefs.getString("syncUrl","");syncKey=prefs.getString("syncKey","");
   syncOkAt=prefs.getUInt("syncOkAt",0);
+  if(historyBytes==Litter::LEGACY_HISTORY_BYTES)saveHistory(); // atomically replace the old NVS blob
 }
 // A recognised weight feeds the trend chart and moves the cat's reference weight.
 void learnWeight(int8_t cat,uint16_t grams,uint32_t epoch) {
@@ -375,7 +393,7 @@ void stateApi(){
   if(doc.overflowed()){reply(503,"Memoria dashboard insufficiente","Not enough memory for the dashboard");return;}
   String body;serializeJson(doc,body);server.sendHeader("Cache-Control","no-store");server.send(200,"application/json",body);
 }
-String snapshotJson(){
+String snapshotJson(Litter::SyncWindow window){
   DynamicJsonDocument doc(11000); // ~9 KB with 64 visits and 16 deletions
   doc["device"]=deviceId;doc["firmware"]=Config::FIRMWARE_VERSION;doc["now"]=epochNow();
   JsonArray c=doc.createNestedArray("cats");
@@ -383,33 +401,41 @@ String snapshotJson(){
   JsonObject b=doc.createNestedObject("bin");b["since"]=bin.since;b["visits"]=bin.visits;b["limit"]=cats.binLimitVisits;
   doc["litterAt"]=litterAt;
   JsonArray v=doc.createNestedArray("visits");
-  for(int i=0;i<history.count;i++){const auto& x=history.v[i];auto j=v.createNestedObject();
+  for(int i=window.first;i<window.first+window.count;i++){const auto& x=history.v[i];auto j=v.createNestedObject();
     j["id"]=x.id;j["t"]=x.epoch;j["g"]=x.weightG;j["s"]=x.durationS;j["cat"]=x.cat;j["manual"]=(x.flags&Litter::VISIT_MANUAL)!=0;}
   JsonArray d=doc.createNestedArray("deleted");
-  for(int i=0;i<deleted.count;i++){auto j=d.createNestedObject();j["id"]=deleted.refs[i].id;j["t"]=deleted.refs[i].epoch;}
+  for(int i=0;i<deletedSent;i++){auto j=d.createNestedObject();j["id"]=deleted.refs[i].id;j["t"]=deleted.refs[i].epoch;}
   String out;serializeJson(doc,out);return out;
 }
 void syncWorker(void*){
   for(;;){
     ulTaskNotifyTake(pdTRUE,portMAX_DELAY);
-    int code;
-    {
+    uint32_t started=millis();int code=0,firstError=0;uint8_t attempts=0;
+    // Snapshots are idempotent. A transient TCP failure must not send an explicit
+    // "Send now" request straight into the minutes-long back-off.
+    for(uint8_t attempt=0;attempt<3;attempt++){
+      if(attempt)vTaskDelay(pdMS_TO_TICKS(attempt*1000));
+      attempts++;
       WiFiClient plain;WiFiClientSecure secure;HTTPClient http;
       bool tls=syncTarget.startsWith("https://");
-      if(tls)secure.setInsecure(); // home servers usually have self-signed certificates: the API key is the protection
-      http.setConnectTimeout(4000);http.setTimeout(6000);
+      if(tls){secure.setInsecure();secure.setHandshakeTimeout(4);} // home servers usually have self-signed certificates
+      http.setReuse(false);http.setConnectTimeout(4000);http.setTimeout(6000);
       if(tls?http.begin(secure,syncTarget):http.begin(plain,syncTarget)){
         http.addHeader("Content-Type","application/json");http.addHeader("Authorization",syncAuth);
         code=http.POST(syncBody);http.end();
       }else code=HTTPC_ERROR_CONNECTION_REFUSED;
+      if(code>=0)break; // HTTP replies (including a wrong key or invalid data) are final.
+      if(!firstError)firstError=code;
     }
-    syncBody=String();syncCode=code;syncDone=true;syncBusy=false;
+    syncBody=String();syncCode=code;syncWorkerAttempts=attempts;
+    syncWorkerDurationMs=uint32_t(millis()-started);syncWorkerFirstError=firstError;syncDone=true;syncBusy=false;
   }
 }
 String syncErrorText(int code,bool en){
   switch(code){
     case 0:return "";
-    case HTTPC_ERROR_CONNECTION_REFUSED:return en?"connection refused":"connessione rifiutata";
+    // HTTPClient uses -1 for every failed TCP connect, including a timeout.
+    case HTTPC_ERROR_CONNECTION_REFUSED:return en?"cannot connect to the server":"impossibile connettersi al server";
     case HTTPC_ERROR_READ_TIMEOUT:return en?"no answer in time":"nessuna risposta in tempo";
     case HTTPC_ERROR_CONNECTION_LOST:case HTTPC_ERROR_NOT_CONNECTED:return en?"connection lost":"connessione persa";
     case 401:return en?"wrong API key":"chiave API errata";
@@ -422,29 +448,37 @@ void serviceSync(uint32_t now){
   if(!syncTask || syncBusy)return;
   if(syncDone){
     syncDone=false;int code=syncCode;
+    syncResultId=syncRequestId;syncAttempts=syncWorkerAttempts;syncDurationMs=syncWorkerDurationMs;
+    syncResultCode=code;syncFirstError=syncWorkerFirstError;
     if(syncTaskGen!=syncGen){syncDirty=true;} // settings changed meanwhile: that answer came from the old server
     else if(code>=200 && code<300){
+      if(syncFails)logLine("Server storico: invio ripreso, HTTP "+String(code));
       syncOkAt=epochNow();syncFails=0;syncErrCode=0;prefs.putUInt("syncOkAt",syncOkAt);
       // Visits unchanged since the snapshot was built are now on the server.
-      for(int i=0;i<history.count;i++){auto& v=history.v[i];if(v.flags&Litter::VISIT_SENDING)v.flags=(v.flags&~Litter::VISIT_SENDING)|Litter::VISIT_SYNCED;}
+      Litter::finishSending(history,true);
+      if(Litter::hasUnsent(history))syncDirty=true;
       saveVisitFlags();
       // Deletions reported in this snapshot are now on the server; newer ones stay queued.
       if(deletedSent){memmove(deleted.refs,deleted.refs+deletedSent,(deleted.count-deletedSent)*sizeof(DeletedRef));deleted.count-=deletedSent;saveDeleted();}
     }else{
       syncDirty=true;syncFails++;syncErrCode=code;
-      if(syncFails==1)logLine("Server storico: invio fallito, "+syncErrorText(code,false));
+      syncFailureAt=epochNow();syncFailureCode=code;
+      logLine("Server storico: invio fallito, codice "+String(code)+", "+String(syncAttempts)+" tentativi in "+String(syncDurationMs)+" ms");
     }
     deletedSent=0;
-    for(int i=0;i<history.count;i++)history.v[i].flags&=~Litter::VISIT_SENDING; // failed or kept above as synced
+    Litter::finishSending(history,false); // failed or settings changed: leave them queued
   }
   if(!syncOn || syncUrl.isEmpty() || syncKey.isEmpty() || WiFi.status()!=WL_CONNECTED || !clockSynced())return;
   if(uint32_t(now-wifiUpAt)<10000)return; // right after connecting the first request often fails
   // Changes go out within seconds; otherwise a heartbeat every 15 min. Failures: 30 s, doubling up to 5 min.
   uint32_t wait=syncFails?min(300000u,15000u<<min(syncFails,uint32_t(5))):(syncDirty?3000u:900000u);
   if(syncLastTry && uint32_t(now-syncLastTry)<wait)return;
-  syncLastTry=now;if(!syncLastTry)syncLastTry=1;syncDirty=false;syncTryAt=epochNow();
-  for(int i=0;i<history.count;i++){auto& v=history.v[i];if(!(v.flags&Litter::VISIT_SYNCED))v.flags|=Litter::VISIT_SENDING;}
-  syncBody=snapshotJson();deletedSent=deleted.count;syncTaskGen=syncGen;
+  syncLastTry=now;if(!syncLastTry)syncLastTry=1;syncDirty=false;syncTryAt=epochNow();syncRequestId++;
+  auto window=Litter::syncWindow(history);Litter::markSending(history,window);
+  // Deletions travel only with the newest window. Otherwise their ids could
+  // widen the server's inferred deletion window across visits in later batches.
+  deletedSent=window.first+window.count==history.count?deleted.count:0;
+  syncBody=snapshotJson(window);syncTaskGen=syncGen;
   syncTarget=syncUrl+"/api/ingest";syncAuth="Bearer "+syncKey;
   syncBusy=true;xTaskNotifyGive(syncTask);
 }
@@ -499,8 +533,10 @@ void syncApi(){
 }
 void homeApi(){
   if(!allowedHost()){reply(403,"Host non ammesso","Host not allowed");return;}
-  DynamicJsonDocument doc(26000); // ~20 KB with 64 visits and 4 x 90 days of weights
+  DynamicJsonDocument doc(26000); // metadata and weights; visits are streamed below
   doc["firmware"]=Config::FIRMWARE_VERSION;doc["token"]=token;doc["now"]=epochNow();
+  doc["history_capacity"]=Litter::MAX_VISITS;doc["history_stored"]=historyStored;
+  doc["history_bytes"]=prefs.getBytesLength("visits");doc["history_free_entries"]=prefs.freeEntries();
   JsonObject m=doc.createNestedObject("mcu");
   m["online"]=online();m["ready"]=online()&&initState==Init::Ready;m["pending"]=pending.active;m["armed"]=isArmed();
   auto presence=findDp(104);auto fault=findDp(22);auto lock=findDp(114);
@@ -523,14 +559,24 @@ void homeApi(){
   sync["enabled"]=syncOn;sync["url"]=syncUrl;sync["device"]=deviceId;sync["key_set"]=!syncKey.isEmpty();
   sync["ok_at"]=syncOkAt;sync["error"]=syncErrorText(syncErrCode,english());sync["pending"]=syncOn&&(syncDirty||syncBusy);
   sync["busy"]=bool(syncBusy);sync["try_at"]=syncTryAt;sync["deleted"]=deleted.count;sync["dirty"]=bool(syncDirty);
+  sync["request_id"]=syncRequestId;sync["result_id"]=syncResultId;sync["code"]=syncResultCode;sync["first_error"]=syncFirstError;
+  sync["attempts"]=syncAttempts;sync["duration_ms"]=syncDurationMs;
+  sync["failure_at"]=syncFailureAt;sync["failure_code"]=syncFailureCode;
   uint32_t backoff=syncFails?min(300000u,15000u<<min(syncFails,uint32_t(5))):(syncDirty?3000u:900000u);
   sync["next_s"]=syncOn&&syncLastTry?(uint32_t(millis()-syncLastTry)>=backoff?0:(backoff-uint32_t(millis()-syncLastTry))/1000):0;
   JsonObject b=doc.createNestedObject("bin");b["since"]=bin.since;b["visits"]=bin.visits;
-  JsonArray visitArray=doc.createNestedArray("visits"); // newest first
-  for(int i=int(history.count)-1;i>=0;i--){const auto& v=history.v[i];auto j=visitArray.createNestedObject();
-    j["id"]=v.id;j["t"]=v.epoch;j["g"]=v.weightG;j["s"]=v.durationS;j["cat"]=v.cat;j["manual"]=(v.flags&Litter::VISIT_MANUAL)!=0;j["sent"]=(v.flags&Litter::VISIT_SYNCED)!=0;}
   if(doc.overflowed()){reply(503,"Memoria insufficiente","Not enough memory");return;}
-  String body;serializeJson(doc,body);server.sendHeader("Cache-Control","no-store");server.send(200,"application/json",body);
+  String body;serializeJson(doc,body);doc.clear();doc.shrinkToFit();
+  body.remove(body.length()-1);body+=",\"visits\":[";
+  server.sendHeader("Cache-Control","no-store");server.setContentLength(CONTENT_LENGTH_UNKNOWN);server.send(200,"application/json",body);
+  body=String();String chunk;chunk.reserve(1150);
+  for(int i=int(history.count)-1;i>=0;i--){const auto& v=history.v[i];char row[160];
+    snprintf(row,sizeof(row),"%s{\"id\":%u,\"t\":%lu,\"g\":%u,\"s\":%u,\"cat\":%d,\"manual\":%s,\"sent\":%s}",
+      i==int(history.count)-1?"":",",v.id,(unsigned long)v.epoch,v.weightG,v.durationS,int(v.cat),
+      v.flags&Litter::VISIT_MANUAL?"true":"false",v.flags&Litter::VISIT_SYNCED?"true":"false");
+    chunk+=row;if(chunk.length()>=1000){server.sendContent(chunk);chunk="";}
+  }
+  chunk+="]}";server.sendContent(chunk);server.sendContent("");
 }
 // Truncates on a UTF-8 character boundary.
 void copyName(char* out,size_t cap,const char* in){
@@ -619,7 +665,9 @@ void setupWeb(){
   // "Send now" from the home page: skips the back-off after failures.
   server.on("/api/sync/now",HTTP_POST,[]{if(!protect())return;
     if(!syncOn){reply(409,"Invio al server disattivato","Sending to the server is off");return;}
-    syncFails=0;syncLastTry=0;syncDirty=true;reply(202,"Invio in corso","Sending");});
+    if(!syncBusy){syncFails=0;syncLastTry=0;syncDirty=true;syncErrCode=0;}
+    uint32_t requestId=syncBusy?syncRequestId:syncRequestId+1;
+    server.send(202,"application/json",String("{\"request_id\":")+requestId+",\"message\":\""+(english()?"Sending":"Invio in corso")+"\"}");});
   server.on("/api/litter",HTTP_POST,[]{if(!protect())return;litterAt=epochNow();prefs.putUInt("litterAt",litterAt);syncDirty=true;reply(200,"Aggiunta di lettiera registrata","Litter top-up recorded");});
   server.on("/api/bin/reset",HTTP_POST,[]{if(!protect())return;bin.visits=0;bin.since=epochNow();saveVisits();reply(200,"Cassetto svuotato: conteggio azzerato","Bin emptied: count reset");});
   server.on("/api/arm",HTTP_POST,[]{if(!protect())return;

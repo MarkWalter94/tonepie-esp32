@@ -38,6 +38,51 @@ int main() {
   s.catCount = 1; rematch(s, h);
   assert(find(h, 7)->cat == 0 && !(find(h, 7)->flags & VISIT_MANUAL)); // cat 1 removed: back to automatic
 
+  { // The 64-visit NVS blob keeps its layout and all fields after migration.
+    struct OldHistory { uint16_t nextId, count; Visit v[64]; } old{};
+    static_assert(sizeof(old) == LEGACY_HISTORY_BYTES, "legacy NVS layout");
+    old.nextId = 123; old.count = 64;
+    for (int i = 0; i < 64; i++) { old.v[i].id = 60 + i; old.v[i].epoch = 1700000000u + i;
+      old.v[i].weightG = 4200; old.v[i].cat = 1; old.v[i].flags = VISIT_SYNCED | VISIT_SENDING; }
+    History loaded{}; memcpy(&loaded, &old, sizeof(old));
+    assert(restoreStoredHistory(loaded, sizeof(old)) && loaded.count == 64 && loaded.nextId == 123);
+    for (int i = 0; i < 64; i++) assert(loaded.v[i].id == old.v[i].id && loaded.v[i].epoch == old.v[i].epoch
+      && loaded.v[i].weightG == 4200 && loaded.v[i].cat == 1 && loaded.v[i].flags == VISIT_SYNCED);
+    for (int i = 64; i < MAX_VISITS; i++) add(loaded, Visit{});
+    assert(loaded.count == 256 && loaded.v[0].id == 60);
+    History reboot = loaded; assert(restoreStoredHistory(reboot, sizeof(reboot)));
+    assert(memcmp(&loaded, &reboot, sizeof(loaded)) == 0);
+    add(reboot, Visit{}); assert(reboot.count == 256 && reboot.v[0].id == 61);
+    reboot.count = 65; assert(!restoreStoredHistory(reboot, sizeof(old)) && reboot.count == 0);
+    assert(!restoreStoredHistory(reboot, sizeof(old) - 1));
+  }
+  { // Four contiguous upload windows drain 256 visits without skipping any.
+    History backlog{};
+    for (int i = 0; i < MAX_VISITS; i++) add(backlog, Visit{});
+    for (int batch = 0; batch < 4; batch++) {
+      auto window = syncWindow(backlog);
+      assert(window.first == batch * SYNC_VISITS && window.count == 64);
+      markSending(backlog, window);
+      if (!batch) { finishSending(backlog, false); assert(syncWindow(backlog).first == 0); markSending(backlog, window); }
+      finishSending(backlog, true);
+      assert(hasUnsent(backlog) == (batch < 3));
+    }
+    auto latest = syncWindow(backlog); assert(latest.first == 192 && latest.count == 64);
+    touch(backlog.v[8]); assert(syncWindow(backlog).first == 8);
+    markSending(backlog, syncWindow(backlog)); touch(backlog.v[8]);
+    finishSending(backlog, true); assert(!(backlog.v[8].flags & VISIT_SYNCED)); // changed in flight
+    assert(syncWindow(backlog).first == 8);
+    History empty{}; auto none = syncWindow(empty); assert(none.first == 0 && none.count == 0);
+  }
+  { // Reboot preserves unrecognised visits even if today's weights would match.
+    Settings c = twoCats(); History stored{};
+    Visit v{}; v.weightG = 4200; v.cat = CAT_UNKNOWN; v.flags = VISIT_SYNCED; add(stored, v);
+    Visit removed = v; removed.cat = 2; removed.flags |= VISIT_MANUAL; add(stored, removed);
+    retainStoredCats(c, stored);
+    assert(stored.v[0].cat == CAT_UNKNOWN && stored.v[0].flags == VISIT_SYNCED);
+    assert(stored.v[1].cat == CAT_UNKNOWN && !(stored.v[1].flags & (VISIT_MANUAL | VISIT_SYNCED)));
+  }
+
   // Sanitize rejects garbage
   Settings bad; memset(&bad, 0xff, sizeof(bad)); sanitize(bad); assert(bad.catCount == 0 && bad.binLimitVisits == 30);
   Settings old = twoCats(); old.version = 1; old.reserved = 50; old.binLimitVisits = 2000; // 1.x: 2000 g at 50 g/visit
